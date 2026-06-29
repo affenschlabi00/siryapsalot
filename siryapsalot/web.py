@@ -358,13 +358,20 @@ f.onsubmit=async e=>{e.preventDefault();const m=inp.value.trim();if(!m)return;
   catch(err){t.textContent='Error: '+err;send.disabled=false;return;}
   if(start.started===false){t.textContent=start.busy?'⏳ still finishing the last one — try again in a moment'
       :('Error: '+(start.error||'could not start'));send.disabled=false;return;}
+  function transcript(steps){const ls=(steps||[]).map(st=>st.message).filter(Boolean);
+    return (ls.length>60?ls.slice(-60):ls).join('\\n');}     // live play-by-play of what it's doing
   async function poll(){let s;
     try{s=await (await fetch('/api/build/status')).json();}
     catch(err){t.textContent='Error: '+err;send.disabled=false;return;}
-    if(s.result){const r=s.result;t.remove();add('bot',(r.persona?r.persona+': ':'')+r.reply,r.download);
-      send.disabled=false;inp.focus();return;}
-    if(s.latest)t.textContent='⏳ '+s.latest;
-    setTimeout(poll,600);}
+    const txt=transcript(s.steps);
+    if(s.result){const r=s.result;
+      t.textContent=(txt?txt+'\\n\\n':'')+(r.persona?r.persona+': ':'')+r.reply;
+      if(r.download){const a=document.createElement('a');a.className='dl';a.href='/download/'+r.download;
+        a.textContent='⬇ download '+r.download;a.setAttribute('download','');
+        t.appendChild(document.createElement('br'));t.appendChild(a);}
+      log.scrollTop=log.scrollHeight;send.disabled=false;inp.focus();return;}
+    t.textContent=txt||'⏳ starting…';log.scrollTop=log.scrollHeight;
+    setTimeout(poll,450);}
   poll();};
 evalbtn.onclick=async()=>{evalbtn.disabled=true;
   const card=document.createElement('div');card.className='msg bot';log.appendChild(card);

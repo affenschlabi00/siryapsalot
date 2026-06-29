@@ -79,3 +79,35 @@ def test_recipe_beats_a_failing_model(build_dir):
 def test_catalog_lists_programs():
     cat = recipes.catalog()
     assert any("calculator" in c for c in cat) and len(cat) >= 10
+
+
+def test_gui_fallback_matches_gui_words():
+    assert recipes.gui_fallback("make me a graphical app")["name"] == "click_beeps"
+    assert recipes.gui_fallback("an app with a menu and a form")["name"] == "click_beeps"
+    assert recipes.gui_fallback("a message box that says hi")["name"] == "hello_gui"
+    assert recipes.gui_fallback("primes under 50") is None        # not a GUI request
+
+
+def test_no_model_gui_request_builds_a_window(build_dir):
+    bot = Chatbot(None, out_dir=build_dir)
+    res = bot.send("make me a graphical app")                     # GUI words, no specific recipe
+    assert res["success"] and res.get("recipe")
+    assert "No AI model is connected" in res["reply"]
+
+
+def test_failing_model_gui_request_falls_back_to_a_window(build_dir):
+    """The reported bug: a GUI request the model can't build must NOT dead-end on 'couldn't get it
+    working' — it ships a real, working window instead."""
+    def failing(m, fb, it, h):
+        return {"kind": "build", "program_name": "clockapp", "explanation": "a clock window",
+                "ir": {"metadata": {"name": "x", "entry": "main", "subsystem": "gui"},
+                       "imports": [], "data": [],
+                       "code": [{"label": "main", "instructions": [
+                           {"op": "xor", "args": ["eax", "eax"]},
+                           {"op": "mov", "args": ["rax", "qword ptr [rax]"]}]}]},
+                "self_tests": [{"stdin": "", "expect_window_contains": "Clock"}]}
+
+    bot = Chatbot(failing, out_dir=build_dir, max_iters=2)
+    res = bot.send("make me a graphical app with a menu")         # GUI words, no recipe match
+    assert res["success"] and res.get("recipe")                   # didn't dead-end
+    assert "couldn't generate that exact GUI" in res["reply"]

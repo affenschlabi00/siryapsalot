@@ -241,6 +241,26 @@ the bespoke IR.
   usual failure modes and two more worked examples (factorial = atoi/itoa, hello_window = a window
   proc); the chatbot's default repair budget went 6 → 8.
 
+## D16 — Detailed realtime feedback + GUIs never dead-end
+Two follow-ups after testing: the progress was too vague, and model-generated GUIs always failed.
+
+- **Realtime play-by-play.** `Chatbot.send`'s progress events now carry the actual content, not
+  just stage names: what the model wrote (program name + explanation), an IR summary (subsystem,
+  procedure count, instruction count, imports), each self-test's expectation, each test's result
+  (`✓/✗` + the actual output), the exact build/validate errors, and every repair round. The web UI
+  renders the **full transcript** (last ~60 lines) live in the build bubble — `ChatService` already
+  runs the build in a background thread, so the browser just polls `steps` — and the terminal
+  prints each line. `_ir_summary` is defensive (handles the raw-object format).
+- **GUI fallback.** The model is unreliable at the complex GUI IR (windows + WNDCLASSEXA + a window
+  proc), so a GUI request must never end on "couldn't get it working." `recipes.gui_fallback`
+  recognizes GUI words (gui, graphical, window, button, menu, form, paint, …) and returns a verified
+  template (a message box, or a window with a clickable button). `Chatbot.send` uses it as the
+  terminal fallback in the model-failure path **and** the no-model path, with an honest note, so a
+  GUI ask always yields a real, working window `.exe`. Specific GUI asks (window/button/message box)
+  still match a recipe directly and skip the model entirely.
+- Hardened `Chatbot.set_model` to no-op on a backend without `set_model` (so a model switch can
+  never crash a build).
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:

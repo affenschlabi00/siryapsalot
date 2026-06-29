@@ -95,11 +95,27 @@ reply — it only fires up the build pipeline when you actually ask for a progra
 never hangs while it tries to compile something. (Greetings are answered instantly without even
 calling the model; for anything ambiguous the model itself decides chat-vs-build.)
 
-**Live progress, no frozen screen.** Builds can take a while on slower models, so both the web UI
-and the terminal now stream what's happening — `⏳ Thinking… → Compiling guess.exe… → Running
-self-tests… → Self-test failed, fixing (attempt 2)… → Done ✅` — instead of sitting on one screen.
-The browser runs the build in the background and updates the bubble live; the terminal prints each
-step as it happens.
+**Live, detailed progress — see exactly what it's doing.** Builds stream a real play-by-play, so
+you watch the model work in realtime instead of staring at a frozen screen:
+
+```text
+🤔 Asking gpt-4o to write the program…
+💡 It wrote "factorial": reads n and prints n!
+   console · 1 procedure(s) · 61 instructions · imports: GetStdHandle, ReadFile, WriteFile, ExitProcess
+   self-test 1: stdin='5\n' → output == '120\n'
+🔧 Assembling factorial.exe…
+🧪 Running 1 self-test(s)…   ✗ output == '120\n' → got '24'
+✗ Self-test failed — feeding the error back and repairing (attempt 2/8)…
+✅ Built factorial.exe — passed 1 test(s)
+```
+
+You see what it generated (program, instruction count, imports, the self-tests), what each test
+returned, the exact errors, and every repair round. The browser runs the build in the background
+and streams the transcript into the bubble; the terminal prints each line as it happens.
+
+**GUIs always work.** The model is unreliable at the hard GUI IR, so GUI requests never dead-end:
+if a window/button/graphical request can't be generated, Sir Yaps-a-Lot ships a real, working
+window (with a clickable button) as a starting point and says so — you always get a GUI `.exe`.
 
 ## Reliable by default — verified recipes
 

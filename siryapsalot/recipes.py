@@ -90,6 +90,27 @@ def find(message: str):
     return None
 
 
+_GUI_WORDS = re.compile(
+    r"\b(gui|graphical|window|button|click|dialog|pop ?up|popup|menu|check ?box|text ?box|"
+    r"message ?box|form|interface|paint|canvas|sketch|desktop app|widget|app window)\b", re.I)
+
+
+def gui_fallback(message: str):
+    """A working GUI to fall back to when a GUI request can't be generated. The model is bad at
+    GUI IR, so rather than dead-end on failure we always ship a real window the user can build on."""
+    m = str(message or "")
+    if not _GUI_WORDS.search(m):
+        return None
+    if re.search(r"\b(message ?box|alert|popup|pop ?up|dialog)\b", m, re.I):
+        return {"name": "hello_gui", "ir": _ir("hello_gui.ir.json"),
+                "explanation": "a Windows message box",
+                "self_tests": [{"stdin": "", "expect_dialog_contains": "GUI"}]}
+    return {"name": "click_beeps", "ir": _ir("click_beeps.ir.json"),
+            "explanation": "a window with a clickable button that beeps when clicked",
+            "self_tests": [{"stdin": "", "expect_control_contains": "Beep", "expect_sound": True,
+                            "expect_event": "WM_COMMAND"}]}
+
+
 def catalog() -> list[str]:
     """Human-readable list of what the recipes can build (for a 'what can you do' answer)."""
     seen, out = set(), []

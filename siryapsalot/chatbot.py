@@ -95,6 +95,39 @@ def _emit(progress, stage: str, message: str, **extra):
             pass
 
 
+def _ir_summary(ir) -> str:
+    """A one-line description of what the model actually generated (shown live to the user).
+    Defensive: tolerates the raw-object format and any odd shape."""
+    try:
+        if not isinstance(ir, dict):
+            return "raw machine-code bytes"
+        meta = ir.get("metadata") if isinstance(ir.get("metadata"), dict) else {}
+        sub = meta.get("subsystem", "console")
+        imps = ", ".join(im.get("function", "?") for im in (ir.get("imports") or [])[:8]
+                         if isinstance(im, dict))
+        procs = [p for p in (ir.get("code") or []) if isinstance(p, dict)]
+        n_ins = sum(len([i for i in (p.get("instructions") or []) if isinstance(i, dict) and "op" in i])
+                    for p in procs)
+        if procs:
+            return (f"{sub} · {len(procs)} procedure(s) · {n_ins} instructions · "
+                    f"imports: {imps or 'none'}")
+        return f"{sub} program · imports: {imps or 'none'}"
+    except Exception:
+        return "a program"
+
+
+def _describe_test(t: dict) -> str:
+    """Render a self-test's expectation for the live log."""
+    for k, lbl in (("expect_equals", "output =="), ("expect_contains", "output has"),
+                   ("expect_screen_contains", "screen has"), ("expect_dialog_contains", "dialog has"),
+                   ("expect_window_contains", "window titled"),
+                   ("expect_control_contains", "control"), ("expect_event", "event"),
+                   ("expect_sound", "plays sound")):
+        if t.get(k) not in (None, False):
+            return f"{lbl} {t[k]!r}" if t[k] is not True else lbl
+    return "runs without crashing"
+
+
 def _check(test: dict, run: dict) -> tuple[bool, str]:
     """Did this self-test pass? Returns (ok, reason-if-not)."""
     if run["crashed"]:
@@ -181,7 +214,7 @@ class Chatbot:
 
     def set_model(self, model: str) -> str | None:
         b = self.backend
-        if b and model:
+        if b and model and hasattr(b, "set_model"):
             b.set_model(model)
             return model
         return None
@@ -197,29 +230,35 @@ class Chatbot:
             self.generator.backend = b
         return b
 
-    def _build_recipe(self, rec: dict, message: str, progress=None) -> dict | None:
+    def _build_recipe(self, rec: dict, message: str, progress=None, note=None) -> dict | None:
         """Build a verified recipe (guaranteed-good IR). Returns a result dict, or None if it
         somehow doesn't pass (then send() falls through to the model)."""
         name, ir = rec["name"], rec["ir"]
         out = os.path.join(self.out_dir, f"{name}.exe")
-        _emit(progress, "compiling", f"Building {name}.exe (a ready-made, tested version)…")
+        _emit(progress, "compiling", f"📦 Using a verified build for “{name}” ({_ir_summary(ir)}).")
         rep = self.builder(ir, out)
         if not rep["ok"] or not harness.validate_pe(out)["ok"]:
             return None
         tests = rec.get("self_tests") or [{"stdin": ""}]
-        _emit(progress, "testing", f"Running {len(tests)} self-test(s)…")
+        _emit(progress, "testing", f"🧪 Verifying with {len(tests)} self-test(s)…")
         runs = []
         for t in tests:
             r = harness.run(out, stdin=t.get("stdin", ""))
             runs.append((t, r))
             ok, _why = _check(t, r)
+            got = (r.get("stdout", "") or r.get("screen", "")).strip().replace("\n", " ")
+            _emit(progress, "detail", f"   {'✓' if ok else '✗'} {_describe_test(t)}"
+                  + (f"  → {got[:60]!r}" if got else ""))
             if not ok:
                 return None
         spec = {"program_name": name, "explanation": rec["explanation"]}
         self.history.append({"message": message, "program_name": name,
                              "explanation": rec["explanation"], "ir": ir})
-        _emit(progress, "done", f"Done — built {name}.exe ✅")
-        return {"success": True, "reply": self._success_reply(spec, runs), "path": out, "ir": ir,
+        _emit(progress, "done", f"✅ Built {name}.exe")
+        reply = self._success_reply(spec, runs)
+        if note:
+            reply = note + "\n\n" + reply
+        return {"success": True, "reply": reply, "path": out, "ir": ir,
                 "explanation": rec["explanation"], "outputs": [r["stdout"] for _, r in runs],
                 "iterations": 1, "recipe": True}
 
@@ -246,17 +285,28 @@ class Chatbot:
                 if out is not None:
                     return out
 
-        # No model connected: recipes + chat still work; for anything custom, ask for a provider.
+        from . import recipes
+
+        # No model connected: GUI requests still get a working window; otherwise point at a provider.
         if self.generator is None:
+            grec = recipes.gui_fallback(message)
+            if grec is not None:
+                out = self._build_recipe(grec, message, progress,
+                                         note="No AI model is connected, so here's a working GUI to "
+                                              "start from (connect a model for fully custom apps):")
+                if out is not None:
+                    return out
             _emit(progress, "done", "")
             return {"success": False, "reply": _NO_MODEL_REPLY, "path": None, "ir": None,
                     "chat": True, "iterations": 0}
 
+        model_name = getattr(self.backend, "model", None)
         feedback = None
         spec = {}
         for it in range(self.max_iters):
             _emit(progress, "thinking",
-                  "Thinking…" if it == 0 else f"Rethinking (attempt {it + 1}/{self.max_iters})…",
+                  (f"🤔 Asking {model_name} to write the program…" if it == 0 else
+                   f"🔁 Repairing (attempt {it + 1}/{self.max_iters}) — feeding back the error…"),
                   iter=it, max=self.max_iters)
             spec = self.generator(message, feedback, it, self.history)
 
@@ -270,30 +320,43 @@ class Chatbot:
 
             ir = spec.get("ir", spec)  # tolerate a bare IR
             name = spec.get("program_name") or _slug(message)
+            expl = str(spec.get("explanation", "")).strip()
             tests = spec.get("self_tests") or [{"stdin": ""}]
             out = os.path.join(self.out_dir, f"{name}.exe")
 
-            _emit(progress, "compiling", f"Compiling {name}.exe…", iter=it, name=name)
+            # Show exactly what the model produced, in realtime.
+            _emit(progress, "generated", f"💡 It wrote “{name}”" + (f": {expl}" if expl else ""),
+                  iter=it, name=name, explanation=expl)
+            _emit(progress, "detail", "   " + _ir_summary(ir))
+            for ti, t in enumerate(tests):
+                _emit(progress, "detail",
+                      f"   self-test {ti + 1}: stdin={t.get('stdin', '')!r} → {_describe_test(t)}")
+
+            _emit(progress, "compiling", f"🔧 Assembling {name}.exe…", iter=it, name=name)
             rep = self.builder(ir, out)
             if not rep["ok"]:
+                err = rep["errors"][0]["message"] if rep.get("errors") else "build failed"
                 feedback = fb.from_build(rep)
-                _emit(progress, "repairing", "Build failed — reading the errors and fixing…",
-                      iter=it)
+                _emit(progress, "repairing", f"⚠️ Build error: {err}")
                 if verbose:
                     print(f"  iter {it}: build failed")
                 continue
             vp = harness.validate_pe(out)
             if not vp["ok"]:
+                issue = (vp.get("issues") or ["did not validate"])[0]
                 feedback = fb.from_validate(vp)
-                _emit(progress, "repairing", "The binary didn't validate — fixing…", iter=it)
+                _emit(progress, "repairing", f"⚠️ PE validation: {issue}")
                 continue
 
-            _emit(progress, "testing", f"Running {len(tests)} self-test(s)…", iter=it)
+            _emit(progress, "testing", f"🧪 Running {len(tests)} self-test(s)…", iter=it)
             runs, failing = [], None
             for t in tests:
                 r = harness.run(out, stdin=t.get("stdin", ""))
                 runs.append((t, r))
                 ok, why = _check(t, r)
+                got = (r.get("stdout", "") or r.get("screen", "")).strip().replace("\n", " ")
+                _emit(progress, "detail", f"   {'✓' if ok else '✗'} {_describe_test(t)}"
+                      + (f"  → got {got[:60]!r}" if got else (f"  ({why})" if not ok else "")))
                 if not ok and failing is None:
                     failing = (t, r, why)
 
@@ -301,22 +364,35 @@ class Chatbot:
                 outputs = [r["stdout"] for _, r in runs]
                 reply = self._success_reply(spec, runs)
                 self.history.append({"message": message, "program_name": name,
-                                     "explanation": spec.get("explanation", ""), "ir": ir})
-                _emit(progress, "done", f"Done — built {name}.exe ✅", iter=it, name=name)
+                                     "explanation": expl, "ir": ir})
+                _emit(progress, "done", f"✅ Built {name}.exe — passed {len(runs)} test(s)",
+                      iter=it, name=name)
                 return {"success": True, "reply": reply, "path": out, "ir": ir,
-                        "explanation": spec.get("explanation", ""), "outputs": outputs,
-                        "iterations": it + 1}
+                        "explanation": expl, "outputs": outputs, "iterations": it + 1}
 
             t, r, why = failing
             feedback = self._test_feedback(t, r, why, out)
-            _emit(progress, "repairing", f"Self-test failed ({why}) — fixing…", iter=it, why=why)
+            _emit(progress, "repairing", f"✗ Self-test failed: {why}")
             if verbose:
                 print(f"  iter {it}: self-test failed — {why}")
+
+        # The model couldn't get there — don't dead-end. For a GUI ask, ship a real window.
+        grec = recipes.gui_fallback(message)
+        if grec is not None:
+            _emit(progress, "thinking", "The custom GUI was too much this time — giving you a "
+                                        "working window to build on instead…")
+            out = self._build_recipe(grec, message, progress,
+                                     note="I couldn't generate that exact GUI, so here's a working "
+                                          "window with a button to start from — tell me what to "
+                                          "change and I'll iterate:")
+            if out is not None:
+                return out
 
         _emit(progress, "failed", "Couldn't get it working within a few attempts.")
         return {"success": False,
                 "reply": ("I couldn't get this one working within a few attempts. Could you "
-                          "rephrase or simplify the request a little?"),
+                          "rephrase or simplify the request a little? (For GUIs, try “a window "
+                          "with a button” — I can always build that.)"),
                 "path": None, "ir": spec.get("ir"), "iterations": self.max_iters}
 
     # --- feedback & replies ------------------------------------------------

@@ -36,6 +36,19 @@ def test_send_emits_progress_stages(build_dir):
     assert all(e.get("message") is not None for e in events)
 
 
+def test_progress_shows_what_the_model_generated(build_dir):
+    """Live feed must show the actual generated program, not just stage names."""
+    events = []
+    bot = Chatbot(_hello_spec, out_dir=build_dir, prefer_recipes=False)
+    bot.send("a hello program", progress=events.append)
+    stages = [e["stage"] for e in events]
+    assert "generated" in stages and "detail" in stages
+    gen_ev = next(e for e in events if e["stage"] == "generated")
+    assert "hello" in gen_ev["message"] and gen_ev.get("explanation") == "prints hello"
+    assert any("instructions" in e["message"] for e in events if e["stage"] == "detail")
+    assert any("✓" in e["message"] for e in events if e["stage"] == "detail")  # per-test result
+
+
 def test_send_emits_repairing_on_self_test_failure(build_dir):
     good = load_example("hello.ir.json")
     specs = [
