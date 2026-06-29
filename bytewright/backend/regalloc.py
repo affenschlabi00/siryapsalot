@@ -10,9 +10,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .isa import CALLEE_SAVED_POOL
+from .isa import ALL_REGS, CALLEE_SAVED_POOL, REG64, reg_index
 
 _VREG = re.compile(r"%v(\d+)")
+_TOKEN = re.compile(r"[a-z][a-z0-9]*")
 
 
 @dataclass
@@ -32,15 +33,33 @@ def find_vregs(proc: dict) -> list[str]:
     return seen
 
 
+def model_used_callee_saved(proc: dict) -> set[str]:
+    """Callee-saved registers the model names directly (so the allocator avoids them).
+
+    Maps any sub-register (ebx, bx, bl -> rbx) to its 64-bit form. This prevents %vN from
+    colliding with a real register the model already uses (decision D4).
+    """
+    used: set[str] = set()
+    for ins in proc.get("instructions", []):
+        for a in ins.get("args", []) or []:
+            for tok in _TOKEN.findall(str(a).lower()):
+                if tok in ALL_REGS and tok != "rip":
+                    r64 = REG64[reg_index(tok)]
+                    if r64 in CALLEE_SAVED_POOL:
+                        used.add(r64)
+    return used
+
+
 def allocate(proc: dict) -> ProcAlloc:
     vregs = find_vregs(proc)
-    if len(vregs) > len(CALLEE_SAVED_POOL):
+    pool = [r for r in CALLEE_SAVED_POOL if r not in model_used_callee_saved(proc)]
+    if len(vregs) > len(pool):
         raise NotImplementedError(
-            f"procedure '{proc.get('label')}' uses {len(vregs)} virtual registers; "
-            f"v1 supports at most {len(CALLEE_SAVED_POOL)} (register spilling not implemented). "
-            f"See decision D4.")
+            f"procedure '{proc.get('label')}' needs {len(vregs)} virtual registers but only "
+            f"{len(pool)} callee-saved registers are free (the model uses the others directly, "
+            f"or there are too many %vN; register spilling is not implemented). See decision D4.")
     alloc = ProcAlloc()
-    for v, phys in zip(vregs, CALLEE_SAVED_POOL):
+    for v, phys in zip(vregs, pool):
         alloc.mapping[v] = phys
         alloc.saved.append(phys)
     return alloc

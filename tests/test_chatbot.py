@@ -82,6 +82,21 @@ def test_interactive_guessing_game(build_dir):
     assert not r["crashed"]
 
 
+def test_tictactoe_game(build_dir):
+    """A real playable game: move parsing, board rendering, win + draw detection."""
+    from bytewright import harness
+    out = os.path.join(build_dir, "tictactoe.exe")
+    rep = harness.build_binary(load_example("tictactoe.ir.json"), out)
+    assert rep["ok"], rep["errors"]
+    win = harness.run(out, stdin="1\n4\n2\n5\n3\n")          # X takes the top row
+    assert not win["crashed"] and "X wins!" in win["stdout"]
+    assert "X X X" in win["stdout"]
+    draw = harness.run(out, stdin="1\n2\n3\n5\n4\n6\n8\n7\n9\n")
+    assert "Draw!" in draw["stdout"]
+    col = harness.run(out, stdin="1\n2\n4\n5\n9\n8\n")        # O takes the middle column
+    assert "O wins!" in col["stdout"]
+
+
 def test_prime_says_not_prime(build_dir):
     from bytewright import harness
     out = os.path.join(build_dir, "prime.exe")

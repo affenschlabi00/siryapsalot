@@ -30,6 +30,9 @@ def claude_model(message, feedback, iteration, history):
         return _spec("prime", "reads a number and reports whether it is prime",
                      [{"stdin": "7", "expect_equals": "prime\n"},
                       {"stdin": "8", "expect_contains": "not prime"}])
+    if "tic" in m or "tac" in m or "toe" in m:
+        return _spec("tictactoe", "a playable 2-player Tic-Tac-Toe (type cell numbers 1-9)",
+                     [{"stdin": "1\n4\n2\n5\n3\n", "expect_contains": "X wins!"}])
     if "tetris" in m or "game" in m:
         return _spec("tetris_board",
                      "Real-time graphical Tetris is beyond the backend right now (no graphics or "
@@ -57,6 +60,7 @@ def main():
         "make me a christmas tree",
         "pop up a message box that says hello",
         "draw me a box with a label",
+        "make me a tic-tac-toe game",
         "make me a tetris game",
         "now write something that tells me whether a number is prime",
         "make me a guessing game",

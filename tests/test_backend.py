@@ -75,6 +75,49 @@ def test_relocations_resolve_to_real_targets(build_dir):
     assert call_targets and all(t in iat_slots for t in call_targets)
 
 
+def test_regalloc_excludes_model_used_registers():
+    from bytewright.backend.regalloc import allocate, model_used_callee_saved
+    proc = {"label": "m", "instructions": [
+        {"op": "xor", "args": ["ebx", "ebx"]},   # model uses rbx (via ebx) directly
+        {"op": "mov", "args": ["%v0", "1"]}]}
+    assert "rbx" in model_used_callee_saved(proc)
+    assert allocate(proc).mapping["%v0"] != "rbx"   # %v0 must avoid the collision
+
+
+def test_vreg_does_not_collide_with_model_register(build_dir):
+    """End-to-end: a %vN survives even when the model clobbers rbx via ebx."""
+    ir = {
+        "metadata": {"name": "noclash", "entry": "main"},
+        "imports": [{"dll": "kernel32.dll", "function": "GetStdHandle"},
+                    {"dll": "kernel32.dll", "function": "WriteFile"},
+                    {"dll": "kernel32.dll", "function": "ExitProcess"}],
+        "data": [{"label": "hStdout", "type": "u64", "value": 0},
+                 {"label": "ch", "type": "zeros", "size": 1},
+                 {"label": "written", "type": "u32", "value": 0}],
+        "code": [{"label": "main", "instructions": [
+            {"op": "mov", "args": ["ecx", "-11"]},
+            {"op": "call", "args": ["import:kernel32.dll!GetStdHandle"]},
+            {"op": "mov", "args": ["qword ptr [data:hStdout]", "rax"]},
+            {"op": "mov", "args": ["%v0", "65"]},          # 'A'
+            {"op": "xor", "args": ["ebx", "ebx"]},          # would zero %v0 if it were rbx
+            {"op": "lea", "args": ["r10", "data:ch"]},
+            {"op": "mov", "args": ["rax", "%v0"]},
+            {"op": "mov", "args": ["byte ptr [r10]", "al"]},
+            {"op": "mov", "args": ["rcx", "qword ptr [data:hStdout]"]},
+            {"op": "lea", "args": ["rdx", "data:ch"]},
+            {"op": "mov", "args": ["r8d", "1"]},
+            {"op": "lea", "args": ["r9", "data:written"]},
+            {"op": "mov", "args": ["qword ptr [rsp+32]", "0"]},
+            {"op": "call", "args": ["import:kernel32.dll!WriteFile"]},
+            {"op": "mov", "args": ["ecx", "0"]},
+            {"op": "call", "args": ["import:kernel32.dll!ExitProcess"]}]}],
+    }
+    from bytewright import harness
+    out = os.path.join(build_dir, "noclash.exe")
+    assert harness.build_binary(ir, out)["ok"]
+    assert harness.run(out)["stdout"] == "A"
+
+
 def test_too_many_virtual_registers_errors(build_dir):
     ir = {
         "metadata": {"name": "many", "entry": "main"},

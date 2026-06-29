@@ -59,7 +59,9 @@ python -m bytewright.cli create "print the fibonacci numbers below 100"
 
 **Scope, honestly.** Bytewright builds:
 - console (text) programs — arithmetic, loops, file + console I/O;
-- **turn-based interactive** programs (line-buffered stdin — *"make me a guessing game"* works);
+- **turn-based games** — e.g. *"make me a tic-tac-toe game"* produces a real playable game
+  (move parsing, board rendering each turn, win/draw detection) and *"make me a guessing game"*
+  works too (line-buffered stdin);
 - **positioned / colored** console output (cursor + fill APIs — boxes, boards, frames);
 - simple **GUI** dialogs via `user32!MessageBoxA` (a real GUI `.exe`).
 

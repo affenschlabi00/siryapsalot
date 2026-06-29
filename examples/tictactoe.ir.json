@@ -1,0 +1,1203 @@
+{
+  "metadata": {
+    "name": "tictactoe",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Two-player (hotseat) Tic-Tac-Toe. Reads moves 1-9 from stdin, redraws the board, detects wins/draws. Built from 'make me a tic-tac-toe game'."
+  },
+  "imports": [
+    {
+      "dll": "kernel32.dll",
+      "function": "GetStdHandle"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ReadFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "WriteFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    }
+  ],
+  "data": [
+    {
+      "label": "hStdout",
+      "type": "u64",
+      "value": 0
+    },
+    {
+      "label": "hStdin",
+      "type": "u64",
+      "value": 0
+    },
+    {
+      "label": "board",
+      "type": "zeros",
+      "size": 9
+    },
+    {
+      "label": "display",
+      "type": "zeros",
+      "size": 18
+    },
+    {
+      "label": "inbuf",
+      "type": "zeros",
+      "size": 16
+    },
+    {
+      "label": "nread",
+      "type": "u32",
+      "value": 0
+    },
+    {
+      "label": "written",
+      "type": "u32",
+      "value": 0
+    },
+    {
+      "label": "win_msg",
+      "type": "bytes",
+      "value": "? wins!\n"
+    },
+    {
+      "label": "draw_msg",
+      "type": "bytes",
+      "value": "Draw!\n"
+    }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-11"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [data:hStdout]",
+            "rax"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-10"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [data:hStdin]",
+            "rax"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:board"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+0]",
+            "49"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+1]",
+            "50"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+2]",
+            "51"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+3]",
+            "52"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+4]",
+            "53"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+5]",
+            "54"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+6]",
+            "55"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+7]",
+            "56"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+8]",
+            "57"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v0",
+            "88"
+          ],
+          "comment": "current mark 'X'"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v1",
+            "0"
+          ],
+          "comment": "moves made"
+        },
+        {
+          "label": "game_loop"
+        },
+        {
+          "op": "call",
+          "args": [
+            "redraw"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "%v1",
+            "9"
+          ]
+        },
+        {
+          "op": "jge",
+          "args": [
+            "do_draw"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdin]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:inbuf"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "16"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:nread"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ReadFile"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "eax",
+            "dword ptr [data:nread]"
+          ]
+        },
+        {
+          "op": "test",
+          "args": [
+            "eax",
+            "eax"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "done"
+          ],
+          "comment": "EOF"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:inbuf"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "ebx",
+            "ebx"
+          ]
+        },
+        {
+          "label": "atoi"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "atoi_done"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "57"
+          ]
+        },
+        {
+          "op": "jg",
+          "args": [
+            "atoi_done"
+          ]
+        },
+        {
+          "op": "imul",
+          "args": [
+            "ebx",
+            "ebx",
+            "10"
+          ]
+        },
+        {
+          "op": "sub",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "al"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "ebx",
+            "eax"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "atoi"
+          ]
+        },
+        {
+          "label": "atoi_done"
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "ebx",
+            "1"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "game_loop"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "ebx",
+            "9"
+          ]
+        },
+        {
+          "op": "jg",
+          "args": [
+            "game_loop"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "ebx"
+          ]
+        },
+        {
+          "op": "dec",
+          "args": [
+            "ecx"
+          ],
+          "comment": "idx = move-1"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:board"
+          ]
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10+rcx]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "57"
+          ]
+        },
+        {
+          "op": "jg",
+          "args": [
+            "game_loop"
+          ],
+          "comment": "cell taken"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rax",
+            "%v0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10+rcx]",
+            "al"
+          ],
+          "comment": "place mark"
+        },
+        {
+          "op": "inc",
+          "args": [
+            "%v1"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:board"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+0]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+1]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl0"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+2]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl0"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+3]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+4]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl1"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+5]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl1"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+6]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+7]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl2"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+8]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl2"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+0]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+3]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl3"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+6]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl3"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+1]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+4]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl4"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+7]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl4"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+2]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+5]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl5"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+8]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl5"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+0]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+4]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl6"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+8]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl6"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+2]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+4]"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wl7"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "byte ptr [r10+6]"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "we_win"
+          ]
+        },
+        {
+          "label": "wl7"
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "%v0",
+            "88"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "set_o"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v0",
+            "88"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "switched"
+          ]
+        },
+        {
+          "label": "set_o"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v0",
+            "79"
+          ]
+        },
+        {
+          "label": "switched"
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "game_loop"
+          ]
+        },
+        {
+          "label": "we_win"
+        },
+        {
+          "op": "call",
+          "args": [
+            "redraw"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:win_msg"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rax",
+            "%v0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r10]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:win_msg"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "8"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "done"
+          ]
+        },
+        {
+          "label": "do_draw"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:draw_msg"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "6"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "label": "done"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ExitProcess"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "redraw",
+      "instructions": [
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:board"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r11",
+            "data:display"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+1]",
+            "32"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+3]",
+            "32"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+5]",
+            "10"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+7]",
+            "32"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+9]",
+            "32"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+11]",
+            "10"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+13]",
+            "32"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+15]",
+            "32"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+17]",
+            "10"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+0]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+0]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+1]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+2]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+2]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+4]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+3]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+6]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+4]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+8]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+5]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+10]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+6]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+12]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+7]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+14]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "al",
+            "byte ptr [r10+8]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11+16]",
+            "al"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:display"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "18"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "ret",
+          "args": []
+        }
+      ]
+    }
+  ]
+}
