@@ -57,10 +57,12 @@ One-shot, same thing:
 python -m bytewright.cli create "print the fibonacci numbers below 100"
 ```
 
-**Scope, honestly.** The backend builds *console* (text) Windows programs. Ask for something
-graphical or real-time — *"make me a tetris game"* — and it won't refuse: it builds the closest
-console version (an ASCII Tetris board) and tells you what it couldn't do. Real GUI/real-time
-games are the Phase 6 expansion (graphics + live-input APIs).
+**Scope, honestly.** The backend builds *console* (text) Windows programs — including
+**turn-based interactive** ones (stdin is line-buffered, so a program can loop reading guesses
+or moves; e.g. *"make me a guessing game"* really works). Ask for something graphical or
+real-time — *"make me a tetris game"* — and it won't refuse: it builds the closest console
+version (an ASCII Tetris board) and tells you what it couldn't do. Real GUI/real-time games are
+the Phase 6 expansion (graphics + live-input APIs).
 
 ```text
 you> make me a tetris game

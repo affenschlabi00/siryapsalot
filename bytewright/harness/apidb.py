@@ -134,7 +134,12 @@ def _read_common(ctx):
     n = ctx.arg(3) & 0xFFFFFFFF
     read_ptr = ctx.arg(4)
     if h == STD_INPUT or h not in ctx.handles:
-        chunk = ctx.stdin[ctx.stdin_pos:ctx.stdin_pos + n]
+        # console cooked mode: a read returns at most one line (through the newline),
+        # so a program can read input line by line in an interactive loop.
+        avail = ctx.stdin[ctx.stdin_pos:]
+        nl = avail.find(b"\n")
+        take = min(n, len(avail)) if nl == -1 else min(n, nl + 1)
+        chunk = avail[:take]
         ctx.stdin_pos += len(chunk)
     else:
         # reading from a vfs file (rare for v1)

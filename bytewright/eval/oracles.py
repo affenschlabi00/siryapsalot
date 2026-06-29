@@ -64,6 +64,29 @@ def strlen(stdin) -> str:
     return f"{n}\n"
 
 
+def guess(stdin) -> str:
+    """The number-guessing game with a fixed target of 42; stops at the correct guess."""
+    out = []
+    for line in _as_str(stdin).splitlines():
+        digits = ""
+        for ch in line:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        if not digits:
+            continue
+        g = int(digits)
+        if g < 42:
+            out.append("too low\n")
+        elif g > 42:
+            out.append("too high\n")
+        else:
+            out.append("correct!\n")
+            break
+    return "".join(out)
+
+
 ORACLES = {
     "hello": hello,
     "count": count,
@@ -73,4 +96,5 @@ ORACLES = {
     "sum1to100": sum1to100,
     "fibonacci": fibonacci,
     "strlen": strlen,
+    "guess": guess,
 }

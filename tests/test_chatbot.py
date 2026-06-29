@@ -72,6 +72,16 @@ def test_new_examples_run(build_dir, example, stdin, must_contain):
     assert not r["crashed"] and must_contain in r["stdout"]
 
 
+def test_interactive_guessing_game(build_dir):
+    """A turn-based game: multiple line-buffered reads in one run, stops at the win."""
+    from bytewright import harness
+    out = os.path.join(build_dir, "guess.exe")
+    harness.build_binary(load_example("guess.ir.json"), out)
+    r = harness.run(out, stdin="50\n40\n42\n99\n")
+    assert r["stdout"] == "too high\ntoo low\ncorrect!\n"   # 99 never processed -> it stopped
+    assert not r["crashed"]
+
+
 def test_prime_says_not_prime(build_dir):
     from bytewright import harness
     out = os.path.join(build_dir, "prime.exe")

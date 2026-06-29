@@ -36,6 +36,9 @@ def claude_model(message, feedback, iteration, history):
                      "live-keyboard APIs), so I built an ASCII Tetris board — the closest console "
                      "version. A playable build is on the roadmap once GUI support lands.",
                      [{"stdin": "", "expect_contains": "+----------+"}])
+    if "guess" in m:
+        return _spec("guess", "a number-guessing game (target 42) — type guesses, get hints",
+                     [{"stdin": "50\n40\n42\n", "expect_contains": "correct!"}])
     if "fib" in m:
         return _spec("fibonacci", "prints the Fibonacci numbers below 100",
                      [{"stdin": "", "expect_contains": "89"}])
@@ -48,6 +51,7 @@ def main():
         "make me a christmas tree",
         "make me a tetris game",
         "now write something that tells me whether a number is prime",
+        "make me a guessing game",
     ]
     for msg in conversation:
         print("\n" + "=" * 72)

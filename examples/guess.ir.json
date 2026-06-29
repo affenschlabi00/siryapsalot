@@ -1,0 +1,457 @@
+{
+  "metadata": {
+    "name": "guess",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "A number-guessing game: the target is 42; reads guesses from stdin line by line and replies 'too low' / 'too high' / 'correct!'. Built from 'make me a guessing game'."
+  },
+  "imports": [
+    {
+      "dll": "kernel32.dll",
+      "function": "GetStdHandle"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ReadFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "WriteFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    }
+  ],
+  "data": [
+    {
+      "label": "hStdout",
+      "type": "u64",
+      "value": 0
+    },
+    {
+      "label": "hStdin",
+      "type": "u64",
+      "value": 0
+    },
+    {
+      "label": "buf",
+      "type": "zeros",
+      "size": 64
+    },
+    {
+      "label": "nread",
+      "type": "u32",
+      "value": 0
+    },
+    {
+      "label": "written",
+      "type": "u32",
+      "value": 0
+    },
+    {
+      "label": "low_msg",
+      "type": "bytes",
+      "value": "too low\n"
+    },
+    {
+      "label": "high_msg",
+      "type": "bytes",
+      "value": "too high\n"
+    },
+    {
+      "label": "win_msg",
+      "type": "bytes",
+      "value": "correct!\n"
+    }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-11"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [data:hStdout]",
+            "rax"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-10"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [data:hStdin]",
+            "rax"
+          ]
+        },
+        {
+          "label": "loop"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdin]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:buf"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "64"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:nread"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ReadFile"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "eax",
+            "dword ptr [data:nread]"
+          ]
+        },
+        {
+          "op": "test",
+          "args": [
+            "eax",
+            "eax"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "done"
+          ],
+          "comment": "EOF -> stop"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v0",
+            "0"
+          ],
+          "comment": "atoi -> guess"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:buf"
+          ]
+        },
+        {
+          "label": "atoi"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "atdone"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "57"
+          ]
+        },
+        {
+          "op": "jg",
+          "args": [
+            "atdone"
+          ]
+        },
+        {
+          "op": "imul",
+          "args": [
+            "%v0",
+            "%v0",
+            "10"
+          ]
+        },
+        {
+          "op": "sub",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "al"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "%v0",
+            "rax"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "atoi"
+          ]
+        },
+        {
+          "label": "atdone"
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "%v0",
+            "42"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "too_low"
+          ]
+        },
+        {
+          "op": "jg",
+          "args": [
+            "too_high"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:win_msg"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "9"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "done"
+          ]
+        },
+        {
+          "label": "too_low"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:low_msg"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "8"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "loop"
+          ]
+        },
+        {
+          "label": "too_high"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:high_msg"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "9"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "loop"
+          ]
+        },
+        {
+          "label": "done"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ExitProcess"
+          ]
+        }
+      ]
+    }
+  ]
+}

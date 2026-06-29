@@ -75,6 +75,14 @@ TASKS = [
         "oracle": "strlen",
         "solution": _ex("strlen.ir.json"),
     },
+    {
+        "name": "guess",
+        "intent": ("A number-guessing game (target 42): read guesses from stdin line by line "
+                   "and reply 'too low', 'too high', or 'correct!' (then stop)."),
+        "cases": [{"stdin": "50\n40\n42\n99\n"}, {"stdin": "42\n"}, {"stdin": "10\n20\n30\n"}],
+        "oracle": "guess",
+        "solution": _ex("guess.ir.json"),
+    },
 ]
 
 TASKS_BY_NAME = {t["name"]: t for t in TASKS}
