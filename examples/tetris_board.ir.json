@@ -1,0 +1,173 @@
+{
+  "metadata": {
+    "name": "tetris_board",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Renders an ASCII Tetris playfield. Built from 'make me a tetris game' -- real-time graphical Tetris needs capabilities the backend doesn't have yet (graphics, live keyboard), so this ships the closest console rendering."
+  },
+  "imports": [
+    {
+      "dll": "kernel32.dll",
+      "function": "GetStdHandle"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "WriteFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    }
+  ],
+  "data": [
+    {
+      "label": "hStdout",
+      "type": "u64",
+      "value": 0
+    },
+    {
+      "label": "board",
+      "type": "bytes",
+      "value": "    T E T R I S\n+----------+\n|          |\n|          |\n|    ##    |\n|    ##    |\n|   ###    |\n|  ####    |\n| #### ##  |\n| ######## |\n+----------+\n  lines: 0\n\u0000",
+      "comment": "null-terminated ASCII board"
+    },
+    {
+      "label": "written",
+      "type": "u32",
+      "value": 0
+    }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-11"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [data:hStdout]",
+            "rax"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:board"
+          ],
+          "comment": "strlen(board)"
+        },
+        {
+          "op": "xor",
+          "args": [
+            "r8",
+            "r8"
+          ]
+        },
+        {
+          "label": "sl_loop"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "test",
+          "args": [
+            "al",
+            "al"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "sl_done"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r8"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "sl_loop"
+          ]
+        },
+        {
+          "label": "sl_done"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:board"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ExitProcess"
+          ]
+        }
+      ]
+    }
+  ]
+}

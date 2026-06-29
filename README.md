@@ -33,33 +33,50 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 > the full data factory (compiling a source corpus at multiple optimization levels) and the
 > training runs themselves are gated on a compute decision — see `decisions.md` §11.
 
-## Describe it, get a binary
+## Just talk to it
 
-The headline: say what you want, and the AI builds the `.exe`. A model emits IR, the harness
-builds/validates/runs it, and on failure feeds the crash or behavioral diff back for repair —
-autonomously, until it works.
+It's a chatbot that builds binaries. You say what you want — no flags, no formats, no test
+cases — and it ships a `.exe`. The model writes the IR *and its own self-tests*; the harness
+builds, runs, and checks those tests, feeding any crash or mismatch back for repair until it
+works.
 
 ```bash
-pip install -e ".[ai]"                # adds the anthropic SDK
+pip install -e ".[ai]"                 # adds the anthropic SDK
 export ANTHROPIC_API_KEY=sk-...        # (optional) export BYTEWRIGHT_MODEL=claude-...
 
-python -m bytewright.cli create "print the fibonacci numbers below 100, one per line"
-python -m bytewright.cli create "read a number n from stdin and print n squared" --stdin "9"
-python -m bytewright.cli chat          # interactive: type requests, get binaries
+python -m bytewright.cli chat          # then just type:
+#   you> make me a christmas tree
+#   bot> Done — I built christmas_tree.exe.  *  / *** / ***** ...
+#   you> now something that tells me if a number is prime
+#   bot> Done — I built prime.exe.  (self-tested: 7 -> prime, 8 -> not prime)
 ```
 
-Programmatically — the loop is generator-agnostic, so a live model *or* Claude-in-the-loop
-can be the generator:
+One-shot, same thing:
 
-```python
-from bytewright.agent import build_from_intent, AnthropicGenerator
-res = build_from_intent("sum the integers from 1 to 100 and print the total", AnthropicGenerator())
-print(res["path"], res["outputs"])     # build/sum_*.exe  ['5050\n']
+```bash
+python -m bytewright.cli create "print the fibonacci numbers below 100"
 ```
 
-(No API key in this environment? The exact same loop runs with any
-`fn(intent, feedback, iteration) -> ir` via `CallableGenerator` — that's how the examples
-under `examples/*.ir.json` were produced and verified.)
+**Scope, honestly.** The backend builds *console* (text) Windows programs. Ask for something
+graphical or real-time — *"make me a tetris game"* — and it won't refuse: it builds the closest
+console version (an ASCII Tetris board) and tells you what it couldn't do. Real GUI/real-time
+games are the Phase 6 expansion (graphics + live-input APIs).
+
+```text
+you> make me a tetris game
+bot> Real-time graphical Tetris is beyond the backend right now, so I built an ASCII
+     Tetris board — the closest console version.
+         T E T R I S
+     +----------+
+     |    ##    |
+     |   ###    |
+     | ######## |
+     +----------+
+```
+
+No API key? The exact same loop runs with any `fn(message, feedback, iter, history) -> spec`
+generator (see `examples/chat_demo.py`) — that's how the chatbot demo and every
+`examples/*.ir.json` were produced and verified here.
 
 ## Quick start (compile + inspect)
 

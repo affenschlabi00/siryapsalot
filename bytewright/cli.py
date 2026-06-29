@@ -48,13 +48,11 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("solve", help="run the agent repair loop on a task")
     s.add_argument("task"); s.add_argument("--max-iters", type=int, default=5)
 
-    cr = sub.add_parser("create", help="describe a program in plain English; the AI builds the .exe")
-    cr.add_argument("intent", help='e.g. "print the first 10 fibonacci numbers"')
-    cr.add_argument("-o", "--out"); cr.add_argument("--stdin", action="append", default=[],
-                                                    help="a test-case stdin (repeatable)")
+    cr = sub.add_parser("create", help="describe a program; the AI builds the .exe (no specs needed)")
+    cr.add_argument("intent", help='e.g. "make me a game" or "print the first 10 primes"')
     cr.add_argument("--max-iters", type=int, default=6)
 
-    sub.add_parser("chat", help="interactive: type requests, get binaries")
+    sub.add_parser("chat", help="conversational: just tell it what to build")
 
     rw = sub.add_parser("reward", help="score a task's reference IR on the dense reward ladder")
     rw.add_argument("task")
@@ -99,16 +97,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"success={res['success']} iterations={res['iterations']}")
         return 0 if res["success"] else 1
     if args.cmd == "create":
-        from .agent import AnthropicGenerator, build_from_intent
-        cases = [{"stdin": s} for s in args.stdin] or None
-        res = build_from_intent(args.intent, AnthropicGenerator(), cases=cases,
-                                out_path=args.out, max_iters=args.max_iters, verbose=True)
-        if res["success"]:
-            print(f"\nbuilt {res['path']}  (in {res['iterations']} iteration(s))")
-            for o in res["outputs"]:
-                print(f"  output: {o!r}")
-        else:
-            print(f"\ncould not build a working binary in {res['iterations']} iterations.")
+        from .chatbot import Chatbot, ChatbotGenerator
+        try:
+            bot = Chatbot(ChatbotGenerator(), max_iters=args.max_iters)
+        except RuntimeError as e:
+            print(f"the chatbot needs a model: {e}"); return 1
+        res = bot.send(args.intent, verbose=True)
+        print("\n" + res["reply"])
         return 0 if res["success"] else 1
     if args.cmd == "chat":
         return _chat()
@@ -126,25 +121,23 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _chat() -> int:
-    from .agent import AnthropicGenerator, build_from_intent
+    from .chatbot import Chatbot, ChatbotGenerator
     try:
-        gen = AnthropicGenerator()
+        bot = Chatbot(ChatbotGenerator())
     except RuntimeError as e:
-        print(f"chat needs a model generator: {e}")
+        print(f"chat needs a model: {e}")
+        print('Set ANTHROPIC_API_KEY and `pip install -e ".[ai]"`, then try again.')
         return 1
-    print("bytewright chat — describe a program; I'll build a .exe. Ctrl-D to quit.")
+    print("bytewright - tell me what to build and I'll make you a .exe. (Ctrl-D to quit)")
     while True:
         try:
-            intent = input("\nbuild> ").strip()
+            msg = input("\nyou> ").strip()
         except EOFError:
-            print(); return 0
-        if not intent:
+            print("\nbye!"); return 0
+        if not msg:
             continue
-        res = build_from_intent(intent, gen, verbose=True)
-        if res["success"]:
-            print(f"-> {res['path']}  outputs: {[o for o in res['outputs']]}")
-        else:
-            print("-> could not produce a working binary; try rephrasing or adding detail.")
+        res = bot.send(msg)
+        print("\nbot> " + res["reply"])
 
 
 if __name__ == "__main__":

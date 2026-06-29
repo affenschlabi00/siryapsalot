@@ -1,0 +1,93 @@
+{
+  "metadata": {
+    "name": "prime",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Reads an integer from stdin and prints 'prime' or 'not prime'. Built from the request 'tell me if a number is prime'."
+  },
+  "imports": [
+    { "dll": "kernel32.dll", "function": "GetStdHandle" },
+    { "dll": "kernel32.dll", "function": "ReadFile" },
+    { "dll": "kernel32.dll", "function": "WriteFile" },
+    { "dll": "kernel32.dll", "function": "ExitProcess" }
+  ],
+  "data": [
+    { "label": "hStdout", "type": "u64", "value": 0 },
+    { "label": "buf", "type": "zeros", "size": 256 },
+    { "label": "nread", "type": "u32", "value": 0 },
+    { "label": "written", "type": "u32", "value": 0 },
+    { "label": "prime_msg", "type": "bytes", "value": "prime\n" },
+    { "label": "notprime_msg", "type": "bytes", "value": "not prime\n" }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        { "op": "mov",  "args": ["ecx", "-11"] },
+        { "op": "call", "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",  "args": ["qword ptr [data:hStdout]", "rax"] },
+        { "op": "mov",  "args": ["ecx", "-10"] },
+        { "op": "call", "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",  "args": ["rcx", "rax"] },
+        { "op": "lea",  "args": ["rdx", "data:buf"] },
+        { "op": "mov",  "args": ["r8d", "256"] },
+        { "op": "lea",  "args": ["r9", "data:nread"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!ReadFile"] },
+
+        { "op": "mov",  "args": ["%v0", "0"], "comment": "atoi -> n" },
+        { "op": "lea",  "args": ["r10", "data:buf"] },
+        { "label": "atoi_loop" },
+        { "op": "movzx", "args": ["eax", "byte ptr [r10]"] },
+        { "op": "cmp",  "args": ["al", "48"] },
+        { "op": "jl",   "args": ["atoi_done"] },
+        { "op": "cmp",  "args": ["al", "57"] },
+        { "op": "jg",   "args": ["atoi_done"] },
+        { "op": "imul", "args": ["%v0", "%v0", "10"] },
+        { "op": "sub",  "args": ["al", "48"] },
+        { "op": "movzx", "args": ["eax", "al"] },
+        { "op": "add",  "args": ["%v0", "rax"] },
+        { "op": "inc",  "args": ["r10"] },
+        { "op": "jmp",  "args": ["atoi_loop"] },
+        { "label": "atoi_done" },
+
+        { "op": "cmp",  "args": ["%v0", "2"] },
+        { "op": "jl",   "args": ["notprime"], "comment": "n < 2 is not prime" },
+        { "op": "mov",  "args": ["rcx", "2"], "comment": "i = 2" },
+        { "label": "chk" },
+        { "op": "mov",  "args": ["rax", "rcx"] },
+        { "op": "imul", "args": ["rax", "rcx"], "comment": "i*i" },
+        { "op": "cmp",  "args": ["rax", "%v0"] },
+        { "op": "jg",   "args": ["isprime"], "comment": "i*i > n -> prime" },
+        { "op": "mov",  "args": ["rax", "%v0"] },
+        { "op": "xor",  "args": ["rdx", "rdx"] },
+        { "op": "div",  "args": ["rcx"], "comment": "rdx = n % i" },
+        { "op": "test", "args": ["rdx", "rdx"] },
+        { "op": "jz",   "args": ["notprime"], "comment": "divisible -> not prime" },
+        { "op": "inc",  "args": ["rcx"] },
+        { "op": "jmp",  "args": ["chk"] },
+
+        { "label": "isprime" },
+        { "op": "mov",  "args": ["rcx", "qword ptr [data:hStdout]"] },
+        { "op": "lea",  "args": ["rdx", "data:prime_msg"] },
+        { "op": "mov",  "args": ["r8d", "6"] },
+        { "op": "lea",  "args": ["r9", "data:written"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!WriteFile"] },
+        { "op": "jmp",  "args": ["done"] },
+
+        { "label": "notprime" },
+        { "op": "mov",  "args": ["rcx", "qword ptr [data:hStdout]"] },
+        { "op": "lea",  "args": ["rdx", "data:notprime_msg"] },
+        { "op": "mov",  "args": ["r8d", "10"] },
+        { "op": "lea",  "args": ["r9", "data:written"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!WriteFile"] },
+
+        { "label": "done" },
+        { "op": "mov",  "args": ["ecx", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!ExitProcess"] }
+      ]
+    }
+  ]
+}
