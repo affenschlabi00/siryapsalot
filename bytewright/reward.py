@@ -25,8 +25,13 @@ W_ALL_TESTS = 0.10   # bonus for passing every case
 W_EFFICIENCY = 0.10  # bonus for small/lean binaries (only when fully correct)
 
 
-def reward(ir: dict, task: dict, out_path: str | None = None) -> dict:
-    """Score an IR attempt against a task. Returns {score, rungs, signals}."""
+def reward(program: dict, task: dict, out_path: str | None = None, kind: str = "ir") -> dict:
+    """Score an attempt against a task. Returns {score, rungs, signals}.
+
+    `kind="ir"` scores an IR program; `kind="obj"` scores a raw machine-code object
+    (the literal training signal for a byte-emitting model). The ladder is identical — only
+    the validate + build step differs.
+    """
     cases = task.get("cases", [{"stdin": ""}])
     oracle = task.get("oracle")
     out = out_path or os.path.join("build", f"_reward_{task.get('name', 'p')}.exe")
@@ -34,16 +39,22 @@ def reward(ir: dict, task: dict, out_path: str | None = None) -> dict:
     signals: dict[str, object] = {}
     score = 0.0
 
-    # rung 1 — IR validates
-    errs = validate_ir(ir)
-    rungs["ir_valid"] = not errs
+    if kind == "obj":
+        from .raw import build_from_obj, validate_obj
+        validate, build = validate_obj, lambda: build_from_obj(program, out)
+    else:
+        validate, build = validate_ir, lambda: harness.build_binary(program, out)
+
+    # rung 1 — the emission validates (schema/semantic for IR, structure for raw bytes)
+    errs = validate(program)
+    rungs["valid"] = not errs
     if errs:
         signals["first_error"] = errs[0]["message"]
         return _result(score, rungs, signals)
     score += W_IR_VALID
 
     # rung 2 — builds
-    rep = harness.build_binary(ir, out)
+    rep = build()
     rungs["builds"] = rep["ok"]
     if not rep["ok"]:
         signals["build_error"] = rep["errors"][0]["message"] if rep["errors"] else "?"

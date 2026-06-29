@@ -24,14 +24,15 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 0 | Scope, repo, frozen IR schema | ✅ done |
 | 1 | Harness / MCP server (the judge) | ✅ core done (Unicorn emulator + all §6 tools + MCP) |
 | 2 | Deterministic backend (IR → .exe) | ✅ done (loops, branches, arithmetic, div/mul, stdin, file I/O, multi-procedure call/ret) |
-| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ `create`/`chat` + repair loop + 8-task eval suite |
-| 4 | Training-data factory | 🟡 starter: harvester emits verified (intent→IR) + repair-trajectory samples |
-| 5 | Train: distill, then RLVR | 🟡 starter: the dense reward ladder (the RLVR reward) is built (`bytewright/reward.py`) |
-| 6 | Harden & expand | 🟡 in progress: GUI (user32 MessageBox), positioned/colored console, a real playable game (Tic-Tac-Toe), and the **raw-bytes path** (model emits literal machine code → binary); angr verification still planned |
+| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ `chat`/`create` chatbot + self-test + repair loop + 9-task eval suite |
+| 4 | Training-data factory | 🟡 harvester emits verified (intent→IR), (intent→raw bytes), and repair-trajectory samples; SFT formatter |
+| 5 | Train: distill, then RLVR | 🟡 dense reward ladder (scores IR *and* raw bytes) + an `RLEnv` (harness-as-reward); training run gated on compute |
+| 6 | Harden & expand | 🟡 GUI (user32 MessageBox), positioned/colored console, a real playable game (Tic-Tac-Toe), and the **raw-bytes path** (model emits literal machine code → binary); angr verification still planned |
 
-> Phases 4–5 are *started* (the data harvester and reward function are real and tested), but
-> the full data factory (compiling a source corpus at multiple optimization levels) and the
-> training runs themselves are gated on a compute decision — see `decisions.md` §11.
+> Phases 4–5 are *scaffolded and tested* (harvester, SFT formatter, reward ladder, RL
+> environment), but the actual training run — and the full data factory (compiling a source
+> corpus at multiple optimization levels) — are gated on a compute decision (`decisions.md` §11).
+> In this repo Claude stands in as the model (hand-emitting IR/bytes); the loops are unchanged.
 
 ## Just talk to it
 
@@ -151,8 +152,16 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
   intercepts each imported API with a Python implementation (no Windows rootfs needed),
   and exposes the Plan §6 tools — `build_binary`, `validate_pe`, `disassemble`, `run`,
   `trace`, `inspect`, `crash_analysis`, `diff_behavior`, `list_imports`, `resolve_api`.
-- **MCP server** (`bytewright/mcp_server.py`): exposes those tools to an agent/model.
-- **Agent** (`bytewright/agent/`): the Phase 3 build → validate → run → diff → repair loop.
+- **Raw-bytes path** (`bytewright/raw.py`): the end goal — `build_from_obj` links model-emitted
+  machine-code bytes + relocations into a PE; `build_raw_pe` accepts an entire `.exe` as bytes.
+  Shares the trusted linker (`backend/layout.link`) with the IR path.
+- **MCP server** (`bytewright/mcp_server.py`): exposes all the tools (incl. `build_from_obj`,
+  `build_raw_pe`) to an agent/model.
+- **Agent / chatbot** (`bytewright/agent/`, `bytewright/chatbot.py`): the build → validate →
+  run → self-test → repair loop; works with an IR or a raw-bytes builder.
+- **Training** (`bytewright/reward.py`, `bytewright/dataset.py`, `bytewright/training/`): the
+  dense reward ladder (the RLVR signal, scores IR and raw bytes), the data harvester, an
+  `RLEnv`, and an SFT formatter — the Phase 4/5 scaffolding.
 
 Key design decisions and how the plan's open questions were resolved live in
 [`decisions.md`](decisions.md).
@@ -161,8 +170,11 @@ Key design decisions and how the plan's open questions were resolved live in
 
 ```
 schema/ir.schema.json     frozen IR contract           bytewright/harness/   emulator + §6 tools
-examples/*.ir.json        IR programs (hello, …)        bytewright/mcp_server.py  MCP surface
-bytewright/backend/       IR -> .exe (trusted)          bytewright/agent/     scaffolded repair loop
-bytewright/eval/          task suite + oracles          tests/                unit + differential tests
+examples/*.ir.json        IR programs (hello, game, …)  bytewright/mcp_server.py  MCP surface (13 tools)
+examples/raw_hi.obj.json  raw machine-code object       bytewright/chatbot.py  conversational builder
+bytewright/backend/       IR -> .exe (trusted)          bytewright/agent/     generators + repair loop
+bytewright/raw.py         raw bytes -> .exe             bytewright/training/  RL env + SFT formatter
+bytewright/eval/          task suite + oracles          bytewright/reward.py  dense reward ladder
+bytewright/dataset.py     training-data harvester       tests/                75 unit/differential tests
 docs/                     plan + design notes           decisions.md          decision log
 ```

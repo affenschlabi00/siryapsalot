@@ -51,6 +51,25 @@ def trajectory_sample(task: dict, result: dict) -> dict:
     }
 
 
+def raw_reference_sample() -> dict:
+    """A verified (intent -> raw machine-code bytes) pair — training data for byte emission."""
+    import json
+    import os
+
+    from . import harness, raw
+    path = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "examples", "raw_hi.obj.json"))
+    obj = json.load(open(path))
+    rep = raw.build_from_obj(obj, "build/_ds_raw.exe")
+    out = harness.run(rep["path"])["stdout"] if rep["ok"] else ""
+    return {
+        "intent": "Print 'Hi' to the console, emitted as raw x86-64 machine code (no IR).",
+        "obj": obj,
+        "source": "raw_reference",
+        "verified": rep["ok"] and out == "Hi\n",
+        "output": out,
+    }
+
+
 def harvest_repair_demo() -> dict:
     """Generate one repair trajectory (buggy factorial -> fixed) as a worked sample."""
     task = TASKS_BY_NAME["factorial"]
@@ -65,6 +84,7 @@ def build_dataset(out_path: str = "datasets/bytewright.jsonl", tasks=TASKS,
     """Write a JSONL dataset of reference samples (+ a repair trajectory). Returns stats."""
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     samples = [reference_sample(t) for t in tasks]
+    samples.append(raw_reference_sample())          # an (intent -> raw bytes) pair
     if include_trajectories:
         samples.append(harvest_repair_demo())
     with open(out_path, "w") as fh:
@@ -73,6 +93,7 @@ def build_dataset(out_path: str = "datasets/bytewright.jsonl", tasks=TASKS,
     verified = sum(1 for s in samples if s.get("verified"))
     return {"path": out_path, "count": len(samples),
             "reference": sum(s["source"] == "reference" for s in samples),
+            "raw": sum(s["source"] == "raw_reference" for s in samples),
             "trajectories": sum(s["source"] == "repair_trajectory" for s in samples),
             "verified": verified}
 
