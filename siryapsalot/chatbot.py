@@ -81,6 +81,30 @@ class Chatbot:
             self.generator.mode = m
         return m
 
+    # --- LLM model / backend switching (orthogonal to the persona) ---------
+    @property
+    def backend(self):
+        return getattr(self.generator, "backend", None)
+
+    def models(self) -> list[str]:
+        b = self.backend
+        return b.list_models() if b else []
+
+    def set_model(self, model: str) -> str | None:
+        b = self.backend
+        if b and model:
+            b.set_model(model)
+            return model
+        return None
+
+    def set_backend(self, name: str):
+        """Switch the LLM provider (e.g. 'openai'); keeps the same persona."""
+        from .llm import make_backend
+        b = make_backend(prefer=name)
+        if hasattr(self.generator, "backend"):
+            self.generator.backend = b
+        return b
+
     def send(self, message: str, verbose: bool = False) -> dict:
         os.makedirs(self.out_dir, exist_ok=True)
         feedback = None
@@ -183,13 +207,16 @@ class ChatbotGenerator:
     ANTHROPIC_API_KEY is set, otherwise a running/ configured Ollama model. No key required.
     """
 
-    def __init__(self, backend=None, model: str | None = None, mode=None):
+    def __init__(self, backend=None, model: str | None = None, mode=None,
+                 backend_name: str | None = None):
         from . import modes
         from .agent import generators, prompt
         from .llm import make_backend
         self._gen = generators
         self._prompt = prompt
-        self.backend = backend or make_backend()
+        self.backend = backend or make_backend(prefer=backend_name)
+        if model:
+            self.backend.set_model(model)
         self.mode = (modes.get_mode(mode) or modes.MODES[modes.DEFAULT])
 
     def __call__(self, message, feedback, iteration, history):

@@ -1,14 +1,16 @@
-"""Pluggable LLM backends for the chatbot — Anthropic API *or* a local Ollama model.
+"""Pluggable LLM backends for the chatbot — OpenAI (ChatGPT), Anthropic, or a local Ollama model.
 
-No API key required: if `ANTHROPIC_API_KEY` is set we use Anthropic; otherwise, if an Ollama
-server is running (or `OLLAMA_MODEL` is set) we use that — fully local, free, offline. The
-chatbot doesn't care which; it just calls `backend.chat(system, messages)`.
+No API key required for Ollama. Each backend exposes the same `chat(system, messages)` plus
+`list_models()` so you can switch the underlying model at runtime. Pick a backend explicitly or
+let it auto-detect.
 
 Env:
+  OPENAI_API_KEY      use OpenAI/ChatGPT (model from OPENAI_MODEL, default gpt-4o-mini)
+  OPENAI_BASE_URL     OpenAI-compatible endpoint (default https://api.openai.com/v1)
   ANTHROPIC_API_KEY   use Anthropic (model from SIRYAPSALOT_MODEL, default claude-sonnet-4-6)
   OLLAMA_MODEL        use a local Ollama model, e.g. "qwen2.5-coder:7b" or "llama3.1"
   OLLAMA_HOST         Ollama server (default http://localhost:11434)
-  SIRYAPSALOT_BACKEND  force "anthropic" or "ollama"
+  SIRYAPSALOT_BACKEND force "openai" | "anthropic" | "ollama"
 """
 from __future__ import annotations
 
@@ -21,12 +23,62 @@ class LLMUnavailable(RuntimeError):
     pass
 
 
+def _http_json(url: str, payload: dict | None = None, headers: dict | None = None,
+               timeout: int = 600) -> dict:
+    data = json.dumps(payload).encode() if payload is not None else None
+    h = {"Content-Type": "application/json", **(headers or {})}
+    req = urllib.request.Request(url, data=data, headers=h)  # POST if data else GET
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode())
+
+
 class LLMBackend:
     name = "base"
+    model = "?"
 
     def chat(self, system: str, messages: list[dict], temperature: float = 0.0,
              force_json: bool = True) -> str:
         raise NotImplementedError
+
+    def list_models(self) -> list[str]:
+        return [self.model]
+
+    def set_model(self, model: str):
+        if model:
+            self.model = model
+
+
+class OpenAIBackend(LLMBackend):
+    name = "openai"
+
+    def __init__(self, model: str | None = None, api_key: str | None = None,
+                 base_url: str | None = None):
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        if not self.api_key:
+            raise LLMUnavailable("OPENAI_API_KEY is not set.")
+        self.base_url = (base_url or os.environ.get("OPENAI_BASE_URL",
+                                                    "https://api.openai.com/v1")).rstrip("/")
+        self.model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+    def _headers(self):
+        return {"Authorization": f"Bearer {self.api_key}"}
+
+    def chat(self, system, messages, temperature=0.0, force_json=True):
+        payload = {"model": self.model, "temperature": temperature,
+                   "messages": [{"role": "system", "content": system}] + list(messages)}
+        if force_json:
+            payload["response_format"] = {"type": "json_object"}  # constrain to valid JSON
+        resp = _http_json(self.base_url + "/chat/completions", payload, self._headers())
+        return resp["choices"][0]["message"]["content"]
+
+    def list_models(self) -> list[str]:
+        try:
+            resp = _http_json(self.base_url + "/models", headers=self._headers(), timeout=15)
+            ids = sorted(m["id"] for m in resp.get("data", []))
+            chat = [i for i in ids if i.startswith(("gpt-", "o1", "o3", "o4", "chatgpt"))]
+            return chat or ids
+        except Exception:
+            return ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"]
 
 
 class AnthropicBackend(LLMBackend):
@@ -44,12 +96,9 @@ class AnthropicBackend(LLMBackend):
             system=system, messages=messages)
         return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
 
-
-def _http_post_json(url: str, payload: dict, timeout: int = 600) -> dict:
-    req = urllib.request.Request(url, data=json.dumps(payload).encode(),
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode())
+    def list_models(self) -> list[str]:
+        known = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5"]
+        return [self.model] + [m for m in known if m != self.model]
 
 
 class OllamaBackend(LLMBackend):
@@ -67,9 +116,20 @@ class OllamaBackend(LLMBackend):
             "options": {"temperature": temperature, "num_ctx": 16384},
         }
         if force_json:
-            payload["format"] = "json"   # Ollama constrains output to valid JSON — big reliability win
-        resp = _http_post_json(self.host + "/api/chat", payload)
+            payload["format"] = "json"
+        resp = _http_json(self.host + "/api/chat", payload)
         return resp["message"]["content"]
+
+    def list_models(self) -> list[str]:
+        try:
+            resp = _http_json(self.host + "/api/tags", timeout=5)
+            names = sorted(m["name"] for m in resp.get("models", []))
+            return names or [self.model]
+        except Exception:
+            return [self.model]
+
+
+_BACKENDS = {"openai": OpenAIBackend, "anthropic": AnthropicBackend, "ollama": OllamaBackend}
 
 
 def _ollama_reachable(host: str) -> bool:
@@ -81,20 +141,23 @@ def _ollama_reachable(host: str) -> bool:
 
 
 def make_backend(prefer: str | None = None) -> LLMBackend:
-    """Pick a backend: explicit > Anthropic key > running Ollama. Raises a helpful error if none."""
+    """Pick a backend: explicit > OpenAI key > Anthropic key > running Ollama."""
     prefer = prefer or os.environ.get("SIRYAPSALOT_BACKEND")
-    if prefer == "anthropic" or (prefer is None and os.environ.get("ANTHROPIC_API_KEY")):
+    if prefer:
+        if prefer not in _BACKENDS:
+            raise LLMUnavailable(f"unknown backend {prefer!r}; choose openai, anthropic, or ollama")
+        return _BACKENDS[prefer]()
+    if os.environ.get("OPENAI_API_KEY"):
+        return OpenAIBackend()
+    if os.environ.get("ANTHROPIC_API_KEY"):
         try:
             return AnthropicBackend()
         except Exception:
-            if prefer == "anthropic":
-                raise
+            pass
     host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-    if prefer == "ollama" or os.environ.get("OLLAMA_MODEL") or _ollama_reachable(host):
+    if os.environ.get("OLLAMA_MODEL") or _ollama_reachable(host):
         return OllamaBackend()
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return AnthropicBackend()
     raise LLMUnavailable(
-        "No model backend available. Either set ANTHROPIC_API_KEY, or install Ollama "
-        "(https://ollama.com), run `ollama pull qwen2.5-coder` and set OLLAMA_MODEL "
-        "(a running Ollama server is auto-detected).")
+        "No model backend available. Set OPENAI_API_KEY (ChatGPT) or ANTHROPIC_API_KEY, or "
+        "install Ollama (https://ollama.com), run `ollama pull qwen2.5-coder` and set "
+        "OLLAMA_MODEL (a running Ollama server is auto-detected).")

@@ -34,7 +34,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 0 | Scope, repo, frozen IR schema | ✅ done |
 | 1 | Harness / MCP server (the judge) | ✅ core done (Unicorn emulator + all §6 tools + MCP) |
 | 2 | Deterministic backend (IR → .exe) | ✅ done (loops, branches, arithmetic, div/mul, stdin, file I/O, multi-procedure call/ret) |
-| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval; **Anthropic or local Ollama** |
+| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval; **OpenAI / Anthropic / local Ollama** + model switcher + self-update |
 | 4 | Training-data factory | 🟡 harvester emits verified (intent→IR), (intent→raw bytes), and repair-trajectory samples; SFT formatter |
 | 5 | Train: distill, then RLVR | 🟡 dense reward ladder (scores IR *and* raw bytes) + an `RLEnv` (harness-as-reward); training run gated on compute |
 | 6 | Harden & expand | 🟡 GUI (message boxes, **real windows, buttons/controls, sound**), **persona switcher** (Lil Yapper / Yapzilla), positioned/colored console, a real game (Tic-Tac-Toe), and the **raw-bytes path**; angr verification still planned |
@@ -50,22 +50,29 @@ You say what you want — no flags, no formats, no test cases — and it ships a
 the model writes the program *and its own self-tests*; the harness builds, runs, and checks them,
 feeding any crash or mismatch back for repair until it works. You only ever see the result.
 
-**Pick a model backend (no API key required):**
+**Pick a model backend** — OpenAI/ChatGPT, Anthropic, or a local Ollama model (auto-detected):
 
 ```bash
-# Option A — local & free with Ollama (https://ollama.com):
-ollama pull qwen2.5-coder            # any capable model works
-export OLLAMA_MODEL=qwen2.5-coder    # a running Ollama server is also auto-detected
+# Option A — OpenAI / ChatGPT:
+export OPENAI_API_KEY=sk-...          # export OPENAI_MODEL=gpt-4o   (default: gpt-4o-mini)
 
-# Option B — Anthropic API:
+# Option B — Anthropic:
 pip install -e ".[ai]" && export ANTHROPIC_API_KEY=sk-...
+
+# Option C — local & free with Ollama (https://ollama.com):
+ollama pull qwen2.5-coder
+export OLLAMA_MODEL=qwen2.5-coder     # a running Ollama server is also auto-detected
 ```
+
+**Switch model/provider any time** — pick a different ChatGPT model from the dropdown in the web
+UI, or in the terminal: `/models` (list), `/model gpt-4o` (switch), `/backend openai|anthropic|ollama`.
+At launch: `siryapsalot --backend openai --model gpt-4o`.
 
 **Then just chat:**
 
 ```bash
 siryapsalot            # terminal chat (no subcommand needed)
-siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 with download buttons
+siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 (model picker + Update button)
 ```
 
 ```text
@@ -95,6 +102,22 @@ Yapzilla ▶ Done — gui_deluxe.exe  (controls: [Click me!]; plays 1 sound 🔊
 ```
 
 In the browser UI (`siryapsalot serve`) there's a dropdown in the top-right to pick the persona.
+
+## Staying up to date
+
+The repo is public, so Sir Yaps-a-Lot can update itself. In the **web UI** there's an **⟳ Update**
+button (top-right) and a **branch dropdown** — pick a branch and click Update to fetch the newest
+code and switch to it. From the terminal:
+
+```bash
+siryapsalot update                 # pull the newest code on the current branch
+siryapsalot update --branch main   # switch to a branch and pull
+siryapsalot update --list          # show current branch / commit / available branches
+# (or inside a chat:  /update   /update main)
+```
+
+After an update, restart `siryapsalot` to load the new code. *Updates require running from a git
+clone installed with `pip install -e .` (so the code lives in your checkout).*
 
 **Scope, honestly.** Sir Yaps-a-Lot builds:
 - console (text) programs — arithmetic, loops, file + console I/O;
@@ -142,9 +165,10 @@ binaries.
    ```powershell
    git clone https://github.com/affenschlabi00/siryapsalot
    cd siryapsalot
-   pip install .            # pulls keystone, capstone, unicorn, lief, jsonschema (all wheels)
+   pip install -e .         # -e keeps code in the clone so the Update button works (all wheels)
    ```
 3. **Pick a model** (one of):
+   - **ChatGPT — OpenAI:** `setx OPENAI_API_KEY sk-...` (optionally `setx OPENAI_MODEL gpt-4o`)
    - **Local & free — Ollama:** install [Ollama for Windows](https://ollama.com/download), then
      ```powershell
      ollama pull qwen2.5-coder
@@ -234,6 +258,10 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
   `build_raw_pe`) to an agent/model.
 - **Agent / chatbot** (`siryapsalot/agent/`, `siryapsalot/chatbot.py`): the build → validate →
   run → self-test → repair loop; works with an IR or a raw-bytes builder.
+- **Model backends** (`siryapsalot/llm.py`): OpenAI/ChatGPT, Anthropic, or local Ollama —
+  switchable at runtime; **personas** in `siryapsalot/modes.py` (Lil Yapper / Yapzilla).
+- **Web UI + self-update** (`siryapsalot/web.py`, `siryapsalot/updater.py`): a browser chat with
+  persona/model pickers, download buttons, and a git **Update** button (branch switching).
 - **Training** (`siryapsalot/reward.py`, `siryapsalot/dataset.py`, `siryapsalot/training/`): the
   dense reward ladder (the RLVR signal, scores IR and raw bytes), the data harvester, an
   `RLEnv`, and an SFT formatter — the Phase 4/5 scaffolding.
@@ -249,7 +277,9 @@ examples/*.ir.json        IR programs (hello, game, …)  siryapsalot/mcp_server
 examples/raw_hi.obj.json  raw machine-code object       siryapsalot/chatbot.py  conversational builder
 siryapsalot/backend/       IR -> .exe (trusted)          siryapsalot/agent/     generators + repair loop
 siryapsalot/raw.py         raw bytes -> .exe             siryapsalot/training/  RL env + SFT formatter
+siryapsalot/llm.py         OpenAI/Anthropic/Ollama       siryapsalot/modes.py   Lil Yapper / Yapzilla
+siryapsalot/web.py         browser chat UI               siryapsalot/updater.py git self-update
 siryapsalot/eval/          task suite + oracles          siryapsalot/reward.py  dense reward ladder
-siryapsalot/dataset.py     training-data harvester       tests/                75 unit/differential tests
+siryapsalot/dataset.py     training-data harvester       tests/                94 unit/differential tests
 docs/                     plan + design notes           decisions.md          decision log
 ```

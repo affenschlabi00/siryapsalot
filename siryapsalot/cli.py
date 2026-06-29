@@ -23,7 +23,14 @@ def main(argv: list[str] | None = None) -> int:
         description="A chatbot that builds Windows binaries. Just run `siryapsalot` and chat.")
     p.add_argument("-m", "--mode", default=None,
                    help="who to chat with: 'lil yapper' (classic) or 'yapzilla' (deluxe GUI+sound)")
+    p.add_argument("--backend", default=None, choices=["openai", "anthropic", "ollama"],
+                   help="LLM provider (default: auto-detect from env)")
+    p.add_argument("--model", default=None, help="LLM model id (e.g. gpt-4o, claude-sonnet-4-6)")
     sub = p.add_subparsers(dest="cmd")   # no subcommand -> chat
+
+    up = sub.add_parser("update", help="pull the newest version from git (optionally switch branch)")
+    up.add_argument("--branch", default=None)
+    up.add_argument("--list", action="store_true", help="just show branches and status")
 
     b = sub.add_parser("build", help="compile IR JSON to a .exe")
     b.add_argument("ir"); b.add_argument("-o", "--out")
@@ -73,11 +80,22 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     if args.cmd is None or args.cmd == "chat":
-        return _chat(args.mode)
+        return _chat(args.mode, args.model, args.backend)
+    if args.cmd == "update":
+        from . import updater
+        if args.list:
+            _print(updater.status())
+            return 0
+        res = updater.update(args.branch)
+        print(("✅ " if res.get("ok") else "⚠️  ") + f"[{res.get('branch')} @{res.get('commit')}] "
+              + (res.get("message") or ""))
+        if res.get("note"):
+            print("   " + res["note"])
+        return 0 if res.get("ok") else 1
     if args.cmd == "serve":
         from .web import serve
         try:
-            serve(port=args.port, mode=args.mode)
+            serve(port=args.port, mode=args.mode, model=args.model, backend_name=args.backend)
         except Exception as e:
             from .llm import LLMUnavailable
             if isinstance(e, LLMUnavailable):
@@ -148,46 +166,61 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-def _chat(mode=None) -> int:
-    from . import modes
+def _chat(mode=None, model=None, backend=None) -> int:
+    from . import modes, updater
     from .chatbot import Chatbot, ChatbotGenerator
     try:
-        gen = ChatbotGenerator(mode=mode)
+        gen = ChatbotGenerator(mode=mode, model=model, backend_name=backend)
     except Exception as e:
         print(e)                      # LLMUnavailable carries a friendly how-to message
         return 1
     bot = Chatbot(gen)
-    b = gen.backend
 
     def banner():
-        m = bot.mode
-        print(f"\n💬 You're chatting with **{m.name}** — {m.tagline}")
-        print(f"   (model backend: {b.name} / {getattr(b, 'model', '?')})")
+        b = bot.backend
+        print(f"\n💬 chatting with **{bot.mode.name}** — {bot.mode.tagline}")
+        print(f"   model: {b.name} / {getattr(b, 'model', '?')}")
 
     print("Sir Yaps-a-Lot. Tell me what to build and I'll make you a .exe.")
-    print("Commands:  /who (list personas)   /switch <name>   /help   Ctrl-D quits")
+    print("Commands:  /who · /switch <persona> · /models · /model <id> · /backend <name> "
+          "· /update [branch] · /help · Ctrl-D quits")
     banner()
     while True:
         try:
-            msg = input(f"\nyou ▶ ").strip()
+            msg = input("\nyou ▶ ").strip()
         except EOFError:
             print("\nbye!"); return 0
         if not msg:
             continue
         if msg in ("/help", "/?"):
-            print("  /who — list who you can chat with;  /switch <name> — change persona")
-            continue
+            print("  /who, /switch <persona>, /models, /model <id>, /backend openai|anthropic|ollama,"
+                  " /update [branch]"); continue
         if msg == "/who":
-            print("Personas:\n" + modes.listing() +
-                  f"\n(currently: {bot.mode.name})")
+            print("Personas:\n" + modes.listing() + f"\n(currently: {bot.mode.name})"); continue
+        if msg == "/models":
+            try:
+                print("  " + ", ".join(bot.models()))
+            except Exception as e:
+                print("  (couldn't list models:", e, ")")
             continue
         if msg.startswith("/switch"):
-            target = msg[len("/switch"):].strip()
-            m = bot.switch(target)
-            if m is None:
-                print(f"  unknown persona {target!r}. Try one of:\n" + modes.listing())
-            else:
-                banner()
+            if bot.switch(msg[len("/switch"):].strip()) is None:
+                print("  unknown persona; try /who")
+            banner(); continue
+        if msg.startswith("/model "):
+            bot.set_model(msg[len("/model "):].strip()); banner(); continue
+        if msg.startswith("/backend"):
+            try:
+                bot.set_backend(msg[len("/backend"):].strip()); banner()
+            except Exception as e:
+                print("  ", e)
+            continue
+        if msg.startswith("/update"):
+            res = updater.update(msg[len("/update"):].strip() or None)
+            print(("  ✅ " if res.get("ok") else "  ⚠️  ")
+                  + f"[{res.get('branch')} @{res.get('commit')}] " + (res.get("message") or ""))
+            if res.get("note"):
+                print("   " + res["note"])
             continue
         res = bot.send(msg)
         print(f"\n{bot.mode.name} ▶ " + res["reply"])

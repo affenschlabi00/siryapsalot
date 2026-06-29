@@ -106,6 +106,7 @@ def test_prime_says_not_prime(build_dir):
 
 
 def test_chatbot_generator_requires_setup(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "SIRYAPSALOT_BACKEND", "OLLAMA_MODEL"):
+        monkeypatch.delenv(k, raising=False)
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY|anthropic SDK"):
         ChatbotGenerator()

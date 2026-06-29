@@ -106,6 +106,19 @@ controls and sounds (they execute in `main`, so they really run under emulation;
 show/play). Self-tests gain `expect_control_contains` and `expect_sound`. Controls/keys reacting to
 *live* clicks remain out of scope (no WM dispatch).
 
+## D10 — Model providers (OpenAI/Anthropic/Ollama) + self-update
+- **Backends** (`siryapsalot/llm.py`): OpenAI/ChatGPT, Anthropic, and Ollama all implement
+  `chat()` + `list_models()`. OpenAI uses `response_format={"type":"json_object"}` (Ollama uses
+  `format=json`) so structured IR output is reliable. Switch provider/model at runtime
+  (`/backend`, `/model`, `--backend/--model`, or the web dropdowns); `make_backend` auto-detects
+  from env (OpenAI key → Anthropic key → running Ollama). OpenAI is called over stdlib `urllib`
+  (no SDK dependency).
+- **Self-update** (`siryapsalot/updater.py`): the repo is public, so the app can `git fetch` +
+  fast-forward `pull` and switch branches (`ls-remote` lists remote branches read-only). Exposed
+  as the web **Update** button (+ branch dropdown) and `siryapsalot update [--branch]` / `/update`.
+  Requires an editable install (`pip install -e .`) so the code lives in the checkout; restart to
+  load new code.
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:

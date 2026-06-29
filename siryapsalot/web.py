@@ -1,8 +1,8 @@
 """A local web GUI for the chatbot: open a browser, chat, download binaries.
 
-Pure stdlib (http.server) — no extra dependencies. `siryapsalot serve` starts it; the page POSTs
-each message to /api/build, which runs the chatbot and returns the reply plus a download link to
-the freshly built .exe.
+Pure stdlib (http.server) — no extra dependencies. `siryapsalot serve` starts it. The page lets
+you pick the persona (Lil Yapper / Yapzilla) and the LLM model, chat to build .exe files, and
+hit an Update button to pull the newest code from the public repo (and switch branches).
 """
 from __future__ import annotations
 
@@ -15,22 +15,46 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 class ChatService:
     """The testable core: a message in, a reply + (optional) downloadable binary out."""
 
-    def __init__(self, bot=None, build_dir: str = "build", mode=None):
+    def __init__(self, bot=None, build_dir: str = "build", mode=None, model=None,
+                 backend_name=None):
         if bot is None:
             from .chatbot import Chatbot, ChatbotGenerator
-            bot = Chatbot(ChatbotGenerator(mode=mode), out_dir=build_dir)
+            bot = Chatbot(ChatbotGenerator(mode=mode, model=model, backend_name=backend_name),
+                          out_dir=build_dir)
         self.bot = bot
         self.build_dir = build_dir
 
-    def message(self, text: str, mode=None) -> dict:
+    def message(self, text: str, mode=None, model=None) -> dict:
         if mode:
             self.bot.switch(mode)
+        if model:
+            self.bot.set_model(model)
         res = self.bot.send(text)
         download = (os.path.basename(res["path"])
                     if res.get("success") and res.get("path") else None)
         persona = self.bot.mode.name if self.bot.mode else "Sir Yaps-a-Lot"
         return {"reply": res["reply"], "success": res["success"], "persona": persona,
                 "download": download, "iterations": res.get("iterations")}
+
+    def info(self) -> dict:
+        from . import modes, updater
+        b = self.bot.backend
+        try:
+            models = self.bot.models()
+        except Exception:
+            models = []
+        return {
+            "backend": getattr(b, "name", "?"),
+            "model": getattr(b, "model", "?"),
+            "models": models,
+            "modes": [{"id": m.id, "name": m.name} for m in modes.MODES.values()],
+            "mode": self.bot.mode.id if self.bot.mode else None,
+            **updater.status(),
+        }
+
+    def update(self, branch=None) -> dict:
+        from . import updater
+        return updater.update(branch)
 
 
 INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
@@ -40,49 +64,70 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
  :root{--bg:#0d1117;--panel:#161b22;--me:#1f6feb;--bot:#21262d;--txt:#e6edf3;--mut:#8b949e}
  *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;
    background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column}
- header{padding:14px 20px;background:var(--panel);border-bottom:1px solid #30363d}
- header b{font-size:17px} header span{color:var(--mut);font-size:13px;margin-left:8px}
+ header{padding:12px 18px;background:var(--panel);border-bottom:1px solid #30363d;
+   display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+ header b{font-size:17px} .grow{flex:1}
+ select,button.bar{background:#0d1117;color:var(--txt);border:1px solid #30363d;
+   border-radius:8px;padding:7px 9px;font-size:13px}
+ button.bar{cursor:pointer} button.bar:hover{border-color:var(--me)}
  #log{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
- .msg{max-width:780px;padding:12px 14px;border-radius:12px;white-space:pre-wrap;
+ .msg{max-width:820px;padding:12px 14px;border-radius:12px;white-space:pre-wrap;
    word-wrap:break-word;line-height:1.45}
  .me{align-self:flex-end;background:var(--me);color:#fff;border-bottom-right-radius:3px}
  .bot{align-self:flex-start;background:var(--bot);border-bottom-left-radius:3px;
    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+ .sys{align-self:center;color:var(--mut);font-size:12px}
  .dl{display:inline-block;margin-top:10px;padding:8px 14px;background:#238636;color:#fff;
    border-radius:8px;text-decoration:none;font-family:system-ui}
  form{display:flex;gap:10px;padding:16px 20px;background:var(--panel);border-top:1px solid #30363d}
  #in{flex:1;padding:12px 14px;border-radius:10px;border:1px solid #30363d;background:#0d1117;
    color:var(--txt);font-size:15px} #send{padding:12px 22px;border:0;border-radius:10px;
    background:var(--me);color:#fff;font-size:15px;cursor:pointer} #send:disabled{opacity:.5}
- .hint{color:var(--mut);font-size:13px}
- header{display:flex;align-items:center;gap:12px}
- #mode{margin-left:auto;background:#0d1117;color:var(--txt);border:1px solid #30363d;
-   border-radius:8px;padding:8px 10px;font-size:14px}
 </style></head><body>
-<header><b>Sir Yaps-a-Lot</b><span>pick who builds your .exe →</span>
- <select id="mode" title="who you're chatting with">
-   <option value="classic">🙂 Lil Yapper — simple</option>
-   <option value="deluxe">😈 Yapzilla — full GUI + sound</option>
- </select></header>
+<header>
+ <b>Sir Yaps-a-Lot</b>
+ <select id="mode" title="who you're chatting with"></select>
+ <select id="model" title="LLM model"></select>
+ <span class="grow"></span>
+ <select id="branch" title="git branch"></select>
+ <button class="bar" id="upd" title="pull the newest version from git">⟳ Update</button>
+ <span id="ver" style="color:var(--mut);font-size:12px"></span>
+</header>
 <div id="log"><div class="msg bot">Hi! Tell me what program you want and I'll build it.
-Try: "make me a tic-tac-toe game", "a program that prints the primes under 50", or
-"pop up a message box that says hello".</div></div>
+Try: "make me a tic-tac-toe game", "primes under 50", or (as Yapzilla) "a window with a button that beeps".</div></div>
 <form id="f"><input id="in" autocomplete="off" placeholder="make me a..."><button id="send">Build</button></form>
 <script>
-const log=document.getElementById('log'),inp=document.getElementById('in'),
-      f=document.getElementById('f'),send=document.getElementById('send');
+const log=document.getElementById('log'),inp=document.getElementById('in'),f=document.getElementById('f'),
+      send=document.getElementById('send'),modeSel=document.getElementById('mode'),
+      modelSel=document.getElementById('model'),branchSel=document.getElementById('branch'),
+      upd=document.getElementById('upd'),ver=document.getElementById('ver');
+function fill(sel,items,cur){sel.innerHTML='';items.forEach(it=>{const o=document.createElement('option');
+  o.value=it.value;o.textContent=it.label;if(it.value===cur)o.selected=true;sel.appendChild(o);});}
 function add(cls,txt,dl){const d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;
   if(dl){const a=document.createElement('a');a.className='dl';a.href='/download/'+dl;a.textContent='⬇ download '+dl;
   a.setAttribute('download','');d.appendChild(document.createElement('br'));d.appendChild(a);}
   log.appendChild(d);log.scrollTop=log.scrollHeight;}
+async function loadInfo(){const j=await (await fetch('/api/info')).json();
+  fill(modeSel,j.modes.map(m=>({value:m.id,label:m.name})),j.mode);
+  fill(modelSel,(j.models||[]).map(m=>({value:m,label:m})),j.model);
+  if(j.available){fill(branchSel,(j.branches||[]).map(b=>({value:b,label:'🌿 '+b})),j.branch);
+    ver.textContent=(j.backend||'')+' · '+(j.model||'')+' · @'+(j.commit||'?');}
+  else{branchSel.style.display='none';upd.title='updates need a git checkout (pip install -e .)';
+    ver.textContent=(j.backend||'')+' · '+(j.model||'');}}
 f.onsubmit=async e=>{e.preventDefault();const m=inp.value.trim();if(!m)return;
   add('me',m);inp.value='';send.disabled=true;
   const t=document.createElement('div');t.className='msg bot';t.textContent='building…';log.appendChild(t);
-  const mode=document.getElementById('mode').value;
   try{const r=await fetch('/api/build',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:m,mode:mode})});const j=await r.json();t.remove();
-    add('bot',(j.persona?j.persona+': ':'')+j.reply,j.download);}catch(err){t.remove();add('bot','Error: '+err);}
+      body:JSON.stringify({message:m,mode:modeSel.value,model:modelSel.value})});
+    const j=await r.json();t.remove();add('bot',(j.persona?j.persona+': ':'')+j.reply,j.download);}
+  catch(err){t.remove();add('bot','Error: '+err);}
   send.disabled=false;inp.focus();};
+upd.onclick=async()=>{upd.disabled=true;add('sys','updating…');
+  try{const j=await (await fetch('/api/update',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({branch:branchSel.value})})).json();
+    add('sys',(j.ok?'✅ ':'⚠️ ')+'['+(j.branch||'?')+' @'+(j.commit||'?')+'] '+(j.message||'')+(j.note?'  — '+j.note:''));
+    loadInfo();}catch(err){add('sys','update error: '+err);}upd.disabled=false;};
+loadInfo();
 </script></body></html>"""
 
 
@@ -100,9 +145,22 @@ def make_handler(service: ChatService):
             self.end_headers()
             self.wfile.write(data)
 
+        def _json(self, obj, code=200):
+            self._send(code, "application/json", json.dumps(obj).encode())
+
+        def _body(self):
+            n = int(self.headers.get("Content-Length", 0))
+            return json.loads(self.rfile.read(n)) if n else {}
+
         def do_GET(self):
             if self.path in ("/", "/index.html") or self.path.startswith("/?"):
                 self._send(200, "text/html; charset=utf-8", INDEX_HTML.encode())
+            elif self.path == "/api/info":
+                try:
+                    self._json(service.info())
+                except Exception as e:
+                    self._json({"backend": "?", "model": "?", "models": [], "modes": [],
+                                "available": False, "error": str(e)})
             elif self.path.startswith("/download/"):
                 name = os.path.basename(urllib.parse.unquote(self.path[len("/download/"):]))
                 fp = os.path.join(service.build_dir, name)
@@ -117,27 +175,32 @@ def make_handler(service: ChatService):
                 self._send(404, "text/plain", b"not found")
 
         def do_POST(self):
-            if self.path != "/api/build":
-                self._send(404, "text/plain", b"not found")
-                return
-            n = int(self.headers.get("Content-Length", 0))
             try:
-                body = json.loads(self.rfile.read(n))
-                msg = body["message"]
+                body = self._body()
             except Exception:
-                self._send(400, "application/json", b'{"error":"bad request"}')
+                self._json({"error": "bad request"}, 400)
                 return
-            try:
-                out = service.message(msg, mode=body.get("mode"))
-            except Exception as e:  # never let one bad build kill the server
-                out = {"reply": f"Sorry, that failed: {e}", "success": False, "download": None}
-            self._send(200, "application/json", json.dumps(out).encode())
+            if self.path == "/api/build":
+                try:
+                    out = service.message(body["message"], mode=body.get("mode"),
+                                          model=body.get("model"))
+                except Exception as e:
+                    out = {"reply": f"Sorry, that failed: {e}", "success": False, "download": None}
+                self._json(out)
+            elif self.path == "/api/update":
+                try:
+                    self._json(service.update(body.get("branch")))
+                except Exception as e:
+                    self._json({"ok": False, "message": str(e)})
+            else:
+                self._send(404, "text/plain", b"not found")
 
     return Handler
 
 
-def serve(port: int = 8765, host: str = "127.0.0.1", bot=None, mode=None):
-    service = ChatService(bot=bot, mode=mode)
+def serve(port: int = 8765, host: str = "127.0.0.1", bot=None, mode=None,
+          model=None, backend_name=None):
+    service = ChatService(bot=bot, mode=mode, model=model, backend_name=backend_name)
     httpd = HTTPServer((host, port), make_handler(service))
     print(f"siryapsalot chat UI → http://{host}:{port}   (Ctrl-C to stop)")
     try:

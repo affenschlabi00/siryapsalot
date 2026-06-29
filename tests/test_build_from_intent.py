@@ -59,6 +59,7 @@ def test_repair_loop_via_intent(build_dir):
 
 def test_anthropic_generator_fails_clearly_without_setup(monkeypatch):
     """Without the SDK or a key, the model generator must fail with actionable guidance."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "SIRYAPSALOT_BACKEND", "OLLAMA_MODEL"):
+        monkeypatch.delenv(k, raising=False)
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY|anthropic SDK"):
         AnthropicGenerator()
