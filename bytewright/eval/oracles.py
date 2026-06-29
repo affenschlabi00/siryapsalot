@@ -29,9 +29,24 @@ def factorial(stdin) -> str:
     return f"{math.factorial(n)}\n"
 
 
+def fizzbuzz(stdin) -> str:
+    out = []
+    for i in range(1, 16):
+        if i % 15 == 0:
+            out.append("FizzBuzz")
+        elif i % 3 == 0:
+            out.append("Fizz")
+        elif i % 5 == 0:
+            out.append("Buzz")
+        else:
+            out.append(str(i))
+    return "".join(s + "\n" for s in out)
+
+
 ORACLES = {
     "hello": hello,
     "count": count,
     "echo": echo,
     "factorial": factorial,
+    "fizzbuzz": fizzbuzz,
 }

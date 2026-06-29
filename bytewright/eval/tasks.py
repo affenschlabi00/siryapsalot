@@ -45,6 +45,15 @@ TASKS = [
         "oracle": "factorial",
         "solution": _ex("factorial.ir.json"),
     },
+    {
+        "name": "fizzbuzz",
+        "intent": ("Print FizzBuzz for 1..15: 'Fizz' for multiples of 3, 'Buzz' for "
+                   "multiples of 5, 'FizzBuzz' for multiples of 15, otherwise the number; "
+                   "each on its own line."),
+        "cases": [{"stdin": ""}],
+        "oracle": "fizzbuzz",
+        "solution": _ex("fizzbuzz.ir.json"),
+    },
 ]
 
 TASKS_BY_NAME = {t["name"]: t for t in TASKS}

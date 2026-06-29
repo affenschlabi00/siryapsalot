@@ -42,10 +42,9 @@ def validate_pe(path: str) -> dict:
     in_exec = any(s.virtual_address <= entry < s.virtual_address + s.virtual_size for s in exec_secs)
     if not in_exec:
         issues.append("entry point is not inside an executable section")
-    if oh.machine if hasattr(oh, "machine") else b.header.machine != lief.PE.Header.MACHINE_TYPES.AMD64:
-        if b.header.machine != lief.PE.Header.MACHINE_TYPES.AMD64:
-            issues.append(f"machine is not AMD64 ({b.header.machine})")
-    if not imports and not b.imports:
+    if b.header.machine != lief.PE.Header.MACHINE_TYPES.AMD64:
+        issues.append(f"machine is not AMD64 ({b.header.machine})")
+    if not imports:
         issues.append("no imports (program cannot call any Win32 API)")
 
     return {

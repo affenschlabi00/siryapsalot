@@ -1,0 +1,114 @@
+{
+  "metadata": {
+    "name": "fizzbuzz",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Classic FizzBuzz for 1..15. Exercises modulo (div), multi-way branching, itoa, and a second procedure called via call/ret."
+  },
+  "imports": [
+    { "dll": "kernel32.dll", "function": "GetStdHandle" },
+    { "dll": "kernel32.dll", "function": "WriteFile" },
+    { "dll": "kernel32.dll", "function": "ExitProcess" }
+  ],
+  "data": [
+    { "label": "fizz", "type": "bytes", "value": "Fizz\n" },
+    { "label": "buzz", "type": "bytes", "value": "Buzz\n" },
+    { "label": "fizzbuzz", "type": "bytes", "value": "FizzBuzz\n" },
+    { "label": "numbuf", "type": "zeros", "size": 16 },
+    { "label": "written", "type": "u32", "value": 0 }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        { "op": "mov",  "args": ["ecx", "-11"] },
+        { "op": "call", "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",  "args": ["%v0", "rax"], "comment": "hStdout" },
+        { "op": "mov",  "args": ["%v1", "1"], "comment": "i = 1" },
+        { "label": "loop" },
+        { "op": "cmp",  "args": ["%v1", "15"] },
+        { "op": "jg",   "args": ["done"] },
+
+        { "op": "mov",  "args": ["rax", "%v1"], "comment": "i % 15 ?" },
+        { "op": "xor",  "args": ["rdx", "rdx"] },
+        { "op": "mov",  "args": ["rcx", "15"] },
+        { "op": "div",  "args": ["rcx"] },
+        { "op": "test", "args": ["rdx", "rdx"] },
+        { "op": "jnz",  "args": ["check3"] },
+        { "op": "mov",  "args": ["rcx", "%v0"] },
+        { "op": "lea",  "args": ["rdx", "data:fizzbuzz"] },
+        { "op": "mov",  "args": ["r8d", "9"] },
+        { "op": "call", "args": ["print"] },
+        { "op": "jmp",  "args": ["next"] },
+
+        { "label": "check3" },
+        { "op": "mov",  "args": ["rax", "%v1"], "comment": "i % 3 ?" },
+        { "op": "xor",  "args": ["rdx", "rdx"] },
+        { "op": "mov",  "args": ["rcx", "3"] },
+        { "op": "div",  "args": ["rcx"] },
+        { "op": "test", "args": ["rdx", "rdx"] },
+        { "op": "jnz",  "args": ["check5"] },
+        { "op": "mov",  "args": ["rcx", "%v0"] },
+        { "op": "lea",  "args": ["rdx", "data:fizz"] },
+        { "op": "mov",  "args": ["r8d", "5"] },
+        { "op": "call", "args": ["print"] },
+        { "op": "jmp",  "args": ["next"] },
+
+        { "label": "check5" },
+        { "op": "mov",  "args": ["rax", "%v1"], "comment": "i % 5 ?" },
+        { "op": "xor",  "args": ["rdx", "rdx"] },
+        { "op": "mov",  "args": ["rcx", "5"] },
+        { "op": "div",  "args": ["rcx"] },
+        { "op": "test", "args": ["rdx", "rdx"] },
+        { "op": "jnz",  "args": ["printnum"] },
+        { "op": "mov",  "args": ["rcx", "%v0"] },
+        { "op": "lea",  "args": ["rdx", "data:buzz"] },
+        { "op": "mov",  "args": ["r8d", "5"] },
+        { "op": "call", "args": ["print"] },
+        { "op": "jmp",  "args": ["next"] },
+
+        { "label": "printnum", "comment": "itoa(i) -> numbuf with trailing newline" },
+        { "op": "mov",  "args": ["rax", "%v1"] },
+        { "op": "lea",  "args": ["r10", "data:numbuf"] },
+        { "op": "mov",  "args": ["r11", "r10"] },
+        { "op": "add",  "args": ["r11", "15"] },
+        { "op": "mov",  "args": ["byte ptr [r11]", "10"] },
+        { "op": "mov",  "args": ["r9", "10"] },
+        { "label": "idiv_loop" },
+        { "op": "test", "args": ["rax", "rax"] },
+        { "op": "jz",   "args": ["idone"] },
+        { "op": "xor",  "args": ["rdx", "rdx"] },
+        { "op": "div",  "args": ["r9"] },
+        { "op": "add",  "args": ["dl", "48"] },
+        { "op": "dec",  "args": ["r11"] },
+        { "op": "mov",  "args": ["byte ptr [r11]", "dl"] },
+        { "op": "jmp",  "args": ["idiv_loop"] },
+        { "label": "idone" },
+        { "op": "lea",  "args": ["rax", "data:numbuf"] },
+        { "op": "add",  "args": ["rax", "16"] },
+        { "op": "sub",  "args": ["rax", "r11"], "comment": "length" },
+        { "op": "mov",  "args": ["rcx", "%v0"] },
+        { "op": "mov",  "args": ["rdx", "r11"] },
+        { "op": "mov",  "args": ["r8", "rax"] },
+        { "op": "call", "args": ["print"] },
+
+        { "label": "next" },
+        { "op": "inc",  "args": ["%v1"] },
+        { "op": "jmp",  "args": ["loop"] },
+        { "label": "done" },
+        { "op": "mov",  "args": ["ecx", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!ExitProcess"] }
+      ]
+    },
+    {
+      "label": "print",
+      "comment": "WriteFile(rcx=hFile, rdx=buf, r8=len) -> stdout. Args arrive already in place.",
+      "instructions": [
+        { "op": "lea",  "args": ["r9", "data:written"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!WriteFile"] },
+        { "op": "ret" }
+      ]
+    }
+  ]
+}

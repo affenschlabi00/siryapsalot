@@ -33,6 +33,17 @@ def test_factorial(build_dir, n):
     assert r["exit_code"] == 0
 
 
+def test_fizzbuzz_multiprocedure(build_dir):
+    """FizzBuzz also validates inter-procedure call/ret (the `print` helper)."""
+    out = os.path.join(build_dir, "fizzbuzz.exe")
+    rep = harness.build_binary(load_example("fizzbuzz.ir.json"), out)
+    assert rep["ok"], rep["errors"]
+    r = harness.run(out)
+    assert not r["crashed"] and r["exit_code"] == 0
+    from bytewright.eval.oracles import fizzbuzz
+    assert r["stdout"] == fizzbuzz("")
+
+
 def test_filewrite_creates_file(build_dir):
     out = os.path.join(build_dir, "filewrite.exe")
     harness.build_binary(load_example("filewrite.ir.json"), out)
