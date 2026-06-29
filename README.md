@@ -37,7 +37,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval (**benchmark any model in-GUI or via `eval --live`**); **OpenAI / Anthropic / local Ollama** + model switcher + self-update |
 | 4 | Training-data factory | 🟡 harvester emits verified (intent→IR), (intent→raw bytes), and repair-trajectory samples; SFT formatter |
 | 5 | Train: distill, then RLVR | 🟡 dense reward ladder (scores IR *and* raw bytes) + an `RLEnv` (harness-as-reward); training run gated on compute |
-| 6 | Harden & expand | 🟡 GUI (message boxes, **real windows, clickable buttons/controls, sound**, **live WM_COMMAND/WM_PAINT dispatch**), **persona switcher** (Lil Yapper / Yapzilla), positioned/colored console, a real game (Tic-Tac-Toe), and the **raw-bytes path**; angr verification still planned |
+| 6 | Harden & expand | 🟡 GUI (message boxes, **real windows, clickable buttons/controls, sound**, **live WM_COMMAND/WM_PAINT dispatch**), **verified recipes** for common asks (work with no model), positioned/colored console, a real game (Tic-Tac-Toe), and the **raw-bytes path**; angr verification still planned |
 
 > Phases 4–5 are *scaffolded and tested* (harvester, SFT formatter, reward ladder, RL
 > environment), but the actual training run — and the full data factory (compiling a source
@@ -101,26 +101,29 @@ self-tests… → Self-test failed, fixing (attempt 2)… → Done ✅` — inst
 The browser runs the build in the background and updates the bubble live; the terminal prints each
 step as it happens.
 
-## Two builders — pick who you chat with
+## Reliable by default — verified recipes
 
-Sir Yaps-a-Lot has **two switchable personas** (think of it like a model switcher, but for the
-builder's vibe + powers):
+The machine-level IR is genuinely hard for a model to emit perfectly, so common requests don't
+gamble on the model: they map to a **verified recipe** — a known-good program that is guaranteed to
+build and pass its tests (each one is exercised by the test suite). So these **just work, instantly,
+every time — even with no model connected at all**:
 
-| Persona | Vibe | Builds |
-|---|---|---|
-| 🙂 **Lil Yapper** *(classic)* | the humble OG, keeps it simple | console apps, text games, basic windows & message boxes |
-| 😈 **Yapzilla** *(deluxe)* | the maxed-out beast | **full GUI** — windows with **clickable buttons & controls** — and **SOUND** 🔊 |
+> calculator · FizzBuzz · prime checker · Fibonacci · factorial · guessing game · tic-tac-toe ·
+> Christmas tree · count · echo · string length · sum 1–100 · a drawn box · a message box · a real
+> window · a clickable beeping button · "hello world"
+
+Anything outside that list goes to the model (with a strengthened prompt + an 8-round repair loop).
+If you have no API key and no Ollama, the recipes still build — and for a custom request the bot
+tells you to connect a model. There are **no personas to pick anymore**: there's one builder, Sir
+Yaps-a-Lot, always at full power (console, positioned drawing, real windows, clickable
+buttons/controls, sound, interactive events — whatever fits the request).
 
 ```bash
-siryapsalot -m yapzilla        # start as the deluxe builder
-# …or switch mid-chat:
-you ▶ /who                     # list personas
-you ▶ /switch yapzilla         # change who you're talking to
-you ▶ build me a window with a button that beeps when clicked
-Yapzilla ▶ Done — click_beeps.exe  (controls: [Beep!]; plays 2 sound(s) 🔊; reacts to 2 live event(s) 🖱️)
+you ▶ make me a calculator
+Sir Yaps-a-Lot ▶ Done — calculator.exe (type `a + b`, also - * /).   # verified recipe, instant
+you ▶ a window with a button that beeps when clicked
+Sir Yaps-a-Lot ▶ Done — click_beeps.exe (controls: [Beep!]; plays 2 sound(s) 🔊; 2 live event(s) 🖱️)
 ```
-
-In the browser UI (`siryapsalot serve`) there's a dropdown in the top-right to pick the persona.
 
 ## Staying up to date
 
@@ -145,9 +148,8 @@ clone installed with `pip install -e .` (so the code lives in your checkout).*
   works too (line-buffered stdin);
 - **positioned / colored** console output (cursor + fill APIs — boxes, boards, frames);
 - **GUI** programs — message boxes, real windows (`RegisterClassEx` + `CreateWindowEx` + a
-  message loop), and in **Yapzilla** mode: **child controls** (buttons, etc.) and **sound**
-  (`Beep`/`MessageBeep`/`PlaySound`). e.g. *"a window with a button that beeps"* → a genuine
-  GUI+audio `.exe`.
+  message loop), **child controls** (buttons, etc.) and **sound** (`Beep`/`MessageBeep`/`PlaySound`)
+  — all always available. e.g. *"a window with a button that beeps"* → a genuine GUI+audio `.exe`.
 - **interactive windows** — the harness now **dispatches window messages into your window proc**
   (`WM_CREATE` → `WM_PAINT` → a `WM_COMMAND` per button → `WM_DESTROY`), so a button's **click
   handler** and your **paint handler** actually run and their effects are recorded. *"a window
@@ -315,9 +317,10 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
 - **Agent / chatbot** (`siryapsalot/agent/`, `siryapsalot/chatbot.py`): the build → validate →
   run → self-test → repair loop; works with an IR or a raw-bytes builder.
 - **Model backends** (`siryapsalot/llm.py`): OpenAI/ChatGPT, Anthropic, or local Ollama —
-  switchable at runtime; **personas** in `siryapsalot/modes.py` (Lil Yapper / Yapzilla).
+  switchable at runtime (paste a key in the UI, no env var needed). **Verified recipes**
+  (`siryapsalot/recipes.py`) map common asks to known-good IR so they build with or without a model.
 - **Web UI + self-update** (`siryapsalot/web.py`, `siryapsalot/updater.py`): a browser chat with
-  persona, **provider (+ paste-a-key), and per-provider model** pickers (choose a provider → the
+  **provider (+ paste-a-key) and per-provider model** pickers (choose a provider → the
   model list refreshes to its models; unconfigured providers prompt for an API key, kept in memory
   only), **live build progress** (builds run in a background thread; the UI polls and streams each
   step), a **🧪 Eval** button that benchmarks the selected model on the oracle task suite, download
@@ -337,7 +340,7 @@ examples/*.ir.json        IR programs (hello, game, …)  siryapsalot/mcp_server
 examples/raw_hi.obj.json  raw machine-code object       siryapsalot/chatbot.py  conversational builder
 siryapsalot/backend/       IR -> .exe (trusted)          siryapsalot/agent/     generators + repair loop
 siryapsalot/raw.py         raw bytes -> .exe             siryapsalot/training/  RL env + SFT formatter
-siryapsalot/llm.py         OpenAI/Anthropic/Ollama       siryapsalot/modes.py   Lil Yapper / Yapzilla
+siryapsalot/llm.py         OpenAI/Anthropic/Ollama       siryapsalot/recipes.py verified common builds
 siryapsalot/web.py         browser chat UI               siryapsalot/updater.py git self-update
 siryapsalot/eval/          task suite + oracles          siryapsalot/reward.py  dense reward ladder
 siryapsalot/dataset.py     training-data harvester       tests/                94 unit/differential tests

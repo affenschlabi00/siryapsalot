@@ -29,7 +29,7 @@ def test_chatbot_self_test_gate_rejects_wrong_output(build_dir):
     """If the produced output doesn't match the model's own self-test, it's not accepted."""
     gen = lambda msg, fb, it, hist: _spec("prime.ir.json",
                                           [{"stdin": "7", "expect_equals": "PRIME\n"}])  # wrong case
-    bot = Chatbot(gen, out_dir=build_dir, max_iters=2)
+    bot = Chatbot(gen, out_dir=build_dir, max_iters=2, prefer_recipes=False)  # exercise the model path
     res = bot.send("prime checker")
     assert not res["success"]   # builds & runs, but fails its own (mis-stated) self-test
 

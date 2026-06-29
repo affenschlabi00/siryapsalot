@@ -45,6 +45,12 @@ _HELP_REPLY = ("I build working Windows programs from a plain-English descriptio
                "windows, clickable buttons and sound. Just say things like “make me a "
                "guessing game” or “draw a box that says HELLO” and I’ll build, "
                "test, and hand you the .exe. What should I build?")
+_NO_MODEL_REPLY = ("I can build plenty right now with no setup — try: a calculator, FizzBuzz, a "
+                   "prime checker, Fibonacci, a factorial calculator, a guessing game, "
+                   "tic-tac-toe, a Christmas tree, a drawn box, a window, or a clickable beeping "
+                   "button. For anything custom, connect an AI model: set OPENAI_API_KEY or "
+                   "ANTHROPIC_API_KEY, run a local Ollama model, or paste an API key in the "
+                   "provider box.")
 
 
 def _quick_chat(message: str) -> str | None:
@@ -136,30 +142,33 @@ def _check(test: dict, run: dict) -> tuple[bool, str]:
 class Chatbot:
     """Conversational binary builder. Call .send(message) and get a reply + a built .exe."""
 
-    def __init__(self, generator, max_iters: int = 6, out_dir: str = "build", builder=None):
-        # generator: callable(message, feedback, iteration, history) -> spec dict
-        #            spec = {program_name, explanation, ir, self_tests:[{stdin, expect_*}]}
+    def __init__(self, generator=None, max_iters: int = 8, out_dir: str = "build", builder=None,
+                 prefer_recipes: bool = True):
+        # generator: callable(message, feedback, iteration, history) -> spec dict, or None to run
+        #            recipe-only (common programs still build without any model).
         # builder:   callable(program, out_path) -> build report. Default builds IR; pass
-        #            siryapsalot.raw.build_from_obj to build from raw machine-code bytes instead
-        #            (same self-test + repair loop, the model just emits bytes).
+        #            siryapsalot.raw.build_from_obj to build from raw machine-code bytes instead.
+        # prefer_recipes: try a verified recipe before the model (reliable fast path).
         self.generator = generator
         self.max_iters = max_iters
         self.out_dir = out_dir
         self.builder = builder or harness.build_binary
+        self.prefer_recipes = prefer_recipes
         self.history: list[dict] = []
 
     @property
     def mode(self):
-        """The persona currently chatting (a modes.Mode), if the generator has one."""
-        return getattr(self.generator, "mode", None)
+        """The builder identity — always Sir Yaps-a-Lot (kept as a property for callers)."""
+        m = getattr(self.generator, "mode", None)
+        if m is not None:
+            return m
+        from . import modes
+        return modes.get_mode()
 
     def switch(self, mode_id):
-        """Switch which persona you're chatting with (e.g. 'yapzilla'). Returns the new Mode."""
+        """No-op kept for compatibility: there is one identity now. Returns it."""
         from . import modes
-        m = modes.get_mode(mode_id)
-        if m is not None and hasattr(self.generator, "mode"):
-            self.generator.mode = m
-        return m
+        return modes.get_mode()
 
     # --- LLM model / backend switching (orthogonal to the persona) ---------
     @property
@@ -178,13 +187,41 @@ class Chatbot:
         return None
 
     def set_backend(self, name: str, api_key: str | None = None, model: str | None = None):
-        """Switch the LLM provider (e.g. 'openai'); keeps the same persona. An api_key/model can
-        be supplied at runtime (e.g. pasted in the UI) instead of relying on env vars."""
+        """Switch the LLM provider. An api_key/model can be supplied at runtime (e.g. pasted in the
+        UI) instead of relying on env vars. If there was no model yet, this connects one."""
         from .llm import make_backend
         b = make_backend(prefer=name, api_key=api_key, model=model)
-        if hasattr(self.generator, "backend"):
+        if self.generator is None:
+            self.generator = ChatbotGenerator(backend=b)
+        elif hasattr(self.generator, "backend"):
             self.generator.backend = b
         return b
+
+    def _build_recipe(self, rec: dict, message: str, progress=None) -> dict | None:
+        """Build a verified recipe (guaranteed-good IR). Returns a result dict, or None if it
+        somehow doesn't pass (then send() falls through to the model)."""
+        name, ir = rec["name"], rec["ir"]
+        out = os.path.join(self.out_dir, f"{name}.exe")
+        _emit(progress, "compiling", f"Building {name}.exe (a ready-made, tested version)…")
+        rep = self.builder(ir, out)
+        if not rep["ok"] or not harness.validate_pe(out)["ok"]:
+            return None
+        tests = rec.get("self_tests") or [{"stdin": ""}]
+        _emit(progress, "testing", f"Running {len(tests)} self-test(s)…")
+        runs = []
+        for t in tests:
+            r = harness.run(out, stdin=t.get("stdin", ""))
+            runs.append((t, r))
+            ok, _why = _check(t, r)
+            if not ok:
+                return None
+        spec = {"program_name": name, "explanation": rec["explanation"]}
+        self.history.append({"message": message, "program_name": name,
+                             "explanation": rec["explanation"], "ir": ir})
+        _emit(progress, "done", f"Done — built {name}.exe ✅")
+        return {"success": True, "reply": self._success_reply(spec, runs), "path": out, "ir": ir,
+                "explanation": rec["explanation"], "outputs": [r["stdout"] for _, r in runs],
+                "iterations": 1, "recipe": True}
 
     def send(self, message: str, verbose: bool = False, progress=None) -> dict:
         """Build (or chat) in response to a message. `progress` is an optional callback that
@@ -196,6 +233,23 @@ class Chatbot:
         if quick is not None:
             self.history.append({"message": message, "reply": quick, "chat": True})
             return {"success": True, "reply": quick, "path": None, "ir": None,
+                    "chat": True, "iterations": 0}
+
+        # Reliable fast path: a verified recipe for a common request always builds & passes —
+        # so common asks "just work" regardless of how much the model struggles (or if there's no
+        # model at all).
+        if self.prefer_recipes:
+            from . import recipes
+            rec = recipes.find(message)
+            if rec is not None:
+                out = self._build_recipe(rec, message, progress)
+                if out is not None:
+                    return out
+
+        # No model connected: recipes + chat still work; for anything custom, ask for a provider.
+        if self.generator is None:
+            _emit(progress, "done", "")
+            return {"success": False, "reply": _NO_MODEL_REPLY, "path": None, "ir": None,
                     "chat": True, "iterations": 0}
 
         feedback = None

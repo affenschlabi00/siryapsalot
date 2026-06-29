@@ -33,28 +33,44 @@ def test_index_html_is_a_chat_page():
 def test_index_html_js_string_literals_are_single_line():
     """Regression: a raw newline inside a ' or " JS string literal (e.g. writing join('\\n') in
     the Python source, where \\n becomes a real newline) breaks the ENTIRE <script>, so no handler
-    binds and every dropdown stays empty. Scan the served JS and fail on any such literal."""
+    binds and every dropdown stays empty. Scan the served JS (skipping // and /* */ comments) and
+    fail on any such literal."""
     import re
     js = re.search(r"<script>(.*)</script>", INDEX_HTML, re.S).group(1)
-    quote = None
-    esc = False
-    line = 1
-    for ch in js:
+    i, n, quote, line = 0, len(js), None, 1
+    while i < n:
+        ch = js[i]
         if quote:
-            if esc:
-                esc = False
-            elif ch == "\\":
-                esc = True
-            elif ch == quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
                 quote = None
             elif ch == "\n" and quote in ("'", '"'):
                 raise AssertionError(f"unterminated {quote!r} string literal at <script> line {line}"
                                      " — a raw newline leaked into a JS string (use \\\\n in the "
                                      "Python source).")
-        elif ch in ("'", '"', "`"):
+            if ch == "\n":
+                line += 1
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n and js[i + 1] == "/":            # // line comment
+            while i < n and js[i] != "\n":
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and js[i + 1] == "*":            # /* block comment */
+            i += 2
+            while i + 1 < n and not (js[i] == "*" and js[i + 1] == "/"):
+                if js[i] == "\n":
+                    line += 1
+                i += 1
+            i += 2
+            continue
+        if ch in ("'", '"', "`"):
             quote = ch
         if ch == "\n":
             line += 1
+        i += 1
 
 
 def test_web_server_roundtrip(build_dir):

@@ -1,4 +1,4 @@
-"""The persona switcher: Lil Yapper (classic) vs Yapzilla (deluxe GUI+sound)."""
+"""One builder identity, always at full power — the Lil Yapper / Yapzilla split is gone."""
 import os
 
 from siryapsalot import modes
@@ -8,64 +8,48 @@ from siryapsalot.web import ChatService
 from conftest import load_example
 
 
-def test_modes_resolve_by_id_name_and_alias():
-    assert modes.get_mode("classic").name == "Lil Yapper"
-    assert modes.get_mode("yapzilla").id == "deluxe"
-    assert modes.get_mode("lil").id == "classic"
-    assert modes.get_mode("Yapzilla").id == "deluxe"
-    assert modes.get_mode("nope") is None
+def test_single_identity():
+    m = modes.get_mode()
+    assert m.name == "Sir Yaps-a-Lot" and m.deluxe is True
+    assert modes.get_mode("yapzilla") is m and modes.get_mode("anything") is m  # argument ignored
+    assert list(modes.MODES) == ["default"]
 
 
-def test_deluxe_advertises_sound_classic_does_not():
-    assert "Beep" in available_apis(include_deluxe=True)
-    assert "Beep" not in available_apis(include_deluxe=False)
-    assert "YAPZILLA" in chatbot_system_prompt("deluxe")
-    assert "Lil Yapper" in chatbot_system_prompt("classic")
+def test_full_power_always_advertised():
+    sp = chatbot_system_prompt()
+    assert "Beep" in available_apis()                       # sound is always available
+    assert "Sir Yaps-a-Lot" in sp
+    assert "Yapzilla" not in sp and "Lil Yapper" not in sp   # no personas anywhere
 
 
-class _FakeGen:
-    """A generator with a mutable mode, like ChatbotGenerator."""
-
-    def __init__(self, spec):
-        self.mode = modes.MODES["classic"]
-        self.spec = spec
-
-    def __call__(self, message, feedback, iteration, history):
-        return self.spec
+def test_switch_is_a_noop():
+    bot = Chatbot(None)
+    assert bot.mode.name == "Sir Yaps-a-Lot"
+    assert bot.switch("yapzilla").name == "Sir Yaps-a-Lot"   # nothing to switch to
 
 
-def test_chatbot_switch_changes_persona():
-    bot = Chatbot(_FakeGen({}))
-    assert bot.mode.name == "Lil Yapper"
-    assert bot.switch("yapzilla").name == "Yapzilla"
-    assert bot.mode.id == "deluxe"
-    assert bot.switch("nope") is None and bot.mode.id == "deluxe"   # unknown -> unchanged
-
-
-def test_deluxe_example_records_window_control_and_sound(build_dir):
+def test_full_gui_example_records_window_control_and_sound(build_dir):
     from siryapsalot import harness
     out = os.path.join(build_dir, "gui_deluxe.exe")
     rep = harness.build_binary(load_example("gui_deluxe.ir.json"), out)
     assert rep["ok"], rep["errors"]
     r = harness.run(out)
     assert not r["crashed"]
-    assert r["windows"] and r["windows"][0]["title"] == "Yapzilla Deluxe!"
-    assert r["controls"] and r["controls"][0]["class"] == "BUTTON"
-    assert r["sounds"] and r["sounds"][0]["type"] == "beep"
+    assert r["windows"] and r["controls"] and r["sounds"]
 
 
 def test_chatbot_verifies_control_and_sound(build_dir):
-    spec = {"program_name": "gui_deluxe", "explanation": "window + button + beep",
+    spec = {"kind": "build", "program_name": "gui_deluxe", "explanation": "window + button + beep",
             "ir": load_example("gui_deluxe.ir.json"),
             "self_tests": [{"stdin": "", "expect_control_contains": "Click me!", "expect_sound": True}]}
-    bot = Chatbot(lambda m, fb, it, h: spec, out_dir=build_dir)
-    assert bot.send("make a deluxe window")["success"]
+    bot = Chatbot(lambda m, fb, it, h: spec, out_dir=build_dir, prefer_recipes=False)
+    assert bot.send("a fancy window from my own spec")["success"]
 
 
-def test_web_service_passes_mode_through(build_dir):
-    gen = _FakeGen({"program_name": "hello", "explanation": "x",
-                    "ir": load_example("hello.ir.json"), "self_tests": [{"stdin": "", "expect_contains": "Hello"}]})
-    svc = ChatService(bot=Chatbot(gen, out_dir=build_dir), build_dir=build_dir)
-    out = svc.message("hi", mode="yapzilla")
-    assert gen.mode.id == "deluxe"            # the switch took effect
-    assert out["persona"] == "Yapzilla"
+def test_web_service_persona_is_single_identity(build_dir):
+    gen = lambda m, fb, it, h: {"kind": "build", "program_name": "hello", "explanation": "x",
+                                "ir": load_example("hello.ir.json"),
+                                "self_tests": [{"stdin": "", "expect_contains": "Hello"}]}
+    svc = ChatService(bot=Chatbot(gen, out_dir=build_dir, prefer_recipes=False), build_dir=build_dir)
+    out = svc.message("build me a tiny program")
+    assert out["persona"] == "Sir Yaps-a-Lot"

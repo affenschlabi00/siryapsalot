@@ -52,10 +52,19 @@ Useful patterns:
 - itoa: put the number in rax; repeatedly `xor rdx,rdx; div r9` (r9=10); `add dl,48` gives a
   digit; write digits into a buffer from the end backwards; then WriteFile the slice.
 - atoi: loop bytes; for each ASCII digit d: `imul acc,acc,10; add acc,(d-48)`; stop on non-digit.
+
+Before you answer, CHECK every item — these are the usual ways a build fails:
+1. No push/pop/sub rsp/add rsp/leave/enter/ret-management anywhere. The backend owns the frame.
+2. Every value you need AFTER an API call lives in a %vN (callee-saved) — never in rax/rcx/.../r11.
+3. The 5th+ call arguments are written to [rsp+0x20], [rsp+0x28], … BEFORE the call.
+4. Every `import:dll!Func` you use is also listed in imports[]; every `data:LABEL` is in data[].
+5. The entry procedure ends with `call import:kernel32.dll!ExitProcess`.
+6. To print: GetStdHandle(-11) → save in %v; build bytes; WriteFile(handle, buf, len, &written, 0).
+7. Keep it as small as possible. Prefer a correct, simple program over a clever one.
 """
 
 
-DELUXE_ONLY = {"Beep", "MessageBeep", "PlaySoundA"}   # advertised only in Yapzilla mode
+DELUXE_ONLY = {"Beep", "MessageBeep", "PlaySoundA"}   # sound APIs (always advertised now)
 
 
 def available_apis(include_deluxe: bool = True) -> str:
@@ -76,10 +85,14 @@ def system_prompt(include_deluxe: bool = True) -> str:
         + json.dumps(_schema())
         + "\n\nExample 1 — print a string:\n" + _example("hello.ir.json")
         + "\n\nExample 2 — a loop that prints 1..5:\n" + _example("count.ir.json")
-        + "\n\nExample 3 — an interactive loop (reads stdin lines until EOF):\n"
+        + "\n\nExample 3 — read a number, compute, print a number (atoi + itoa via div):\n"
+        + _example("factorial.ir.json")
+        + "\n\nExample 4 — an interactive loop (reads stdin lines until EOF):\n"
         + _example("guess.ir.json")
-        + "\n\nExample 4 — a GUI program (message box; note subsystem 'gui'):\n"
+        + "\n\nExample 5 — a GUI message box (note subsystem 'gui'):\n"
         + _example("hello_gui.ir.json")
+        + "\n\nExample 6 — a real window with a window proc (code:WndProc; subsystem 'gui'):\n"
+        + _example("hello_window.ir.json")
     )
 
 
@@ -138,7 +151,7 @@ CAPABILITY & SCOPE — read carefully. You CAN build:
   button's click handler and your paint handler actually RUN: switch on the message in edx and
   put real behavior there (beep, draw, change text, MessageBox). This is how you make a window
   that does something when its button is "clicked". Use expect_event to self-test it.
-Some advanced features (child controls, sound) depend on YOUR MODE — see the persona note above.
+- SOUND is always available: Beep(freq,ms), MessageBeep(type), PlaySoundA — use it freely.
 You CANNOT (yet): real-time continuous input (held keys, mouse-move, animation frames),
 graphics/sprites — so a live-action graphical "Tetris" is still out of reach, but a clickable
 button-driven window IS now in reach.
@@ -146,24 +159,26 @@ button-driven window IS now in reach.
   the spirit (a turn-based or positioned-text rendering) and SAY SO in "explanation". Ship it.
 """
 
-_CLASSIC_NOTE = ("YOUR MODE: Lil Yapper — keep it simple. Build console apps, text games, basic "
-                 "windows and message boxes. Do NOT use sound APIs.")
-_DELUXE_NOTE = ("YOUR MODE: Yapzilla — GO BIG. In addition to plain windows you can add child "
-                "CONTROLS (e.g. a button: CreateWindowExA with className \"BUTTON\", a window "
-                "style including WS_CHILD|WS_VISIBLE, the parent window as hWndParent, and a "
-                "small integer control id as hMenu) and SOUND (Beep(freq,ms), MessageBeep(type), "
-                "PlaySoundA). Make your buttons INTERACTIVE: in your window proc handle WM_COMMAND "
-                "(edx==0x111) to react to a click — e.g. Beep or pop a MessageBox — and WM_PAINT "
-                "(edx==0x0F) to react to a repaint; fall back to DefWindowProcA otherwise. The "
-                "harness fires these so the click/paint handlers really run. Use buttons and audio "
-                "whenever it fits the request.")
+_CAPS_NOTE = (
+    "You always have the FULL toolbox — reach for whatever fits the request:\n"
+    "- console + file I/O, arithmetic, loops, branches, multi-procedure call/ret;\n"
+    "- positioned/colored console drawing (SetConsoleCursorPosition, SetConsoleTextAttribute, "
+    "FillConsoleOutputCharacterA);\n"
+    "- GUI: message boxes, real windows, and child CONTROLS (a button = CreateWindowExA with "
+    "className \"BUTTON\", style WS_CHILD|WS_VISIBLE, the parent window as hWndParent, and a small "
+    "integer control id as hMenu);\n"
+    "- SOUND: Beep(freq,ms), MessageBeep(type), PlaySoundA;\n"
+    "- INTERACTIVE windows: in your window proc handle WM_COMMAND (edx==0x111) for a button click "
+    "and WM_PAINT (edx==0x0F) for a repaint, falling back to DefWindowProcA — the harness "
+    "dispatches these so your handlers really run.")
 
 
 def chatbot_system_prompt(mode=None) -> str:
+    """One identity, always full power (the `mode` argument is ignored — kept for compatibility)."""
     from .. import modes
-    m = modes.get_mode(mode) or modes.MODES[modes.DEFAULT]
-    persona = f"PERSONA: {m.persona}\n\n{_DELUXE_NOTE if m.deluxe else _CLASSIC_NOTE}\n\n"
-    return persona + CHATBOT_ROLE + "\n\n" + system_prompt(include_deluxe=m.deluxe)
+    m = modes.get_mode(mode)
+    return (f"You are {m.name}. {m.persona}\n\n{_CAPS_NOTE}\n\n"
+            + CHATBOT_ROLE + "\n\n" + system_prompt(include_deluxe=True))
 
 
 def user_prompt(intent: str, feedback: str | None = None, cases=None) -> str:

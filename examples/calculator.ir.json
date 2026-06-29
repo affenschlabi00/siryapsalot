@@ -1,0 +1,904 @@
+{
+  "metadata": {
+    "name": "calculator",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Reads `a OP b` (+ - * /) from stdin and prints the result."
+  },
+  "imports": [
+    {
+      "dll": "kernel32.dll",
+      "function": "GetStdHandle"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ReadFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "WriteFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    }
+  ],
+  "data": [
+    {
+      "label": "buf",
+      "type": "zeros",
+      "size": 256
+    },
+    {
+      "label": "nread",
+      "type": "u32",
+      "value": 0
+    },
+    {
+      "label": "written",
+      "type": "u32",
+      "value": 0
+    },
+    {
+      "label": "outbuf",
+      "type": "zeros",
+      "size": 32
+    }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-11"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v0",
+            "rax"
+          ],
+          "comment": "hStdout"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-10"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "rax"
+          ],
+          "comment": "hStdin"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:buf"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "256"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:nread"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ReadFile"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v1",
+            "0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v2",
+            "0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v3",
+            "43"
+          ],
+          "comment": "default operator '+'"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:buf"
+          ]
+        },
+        {
+          "label": "skip1"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "test",
+          "args": [
+            "al",
+            "al"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "compute"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "skip1_adv"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "57"
+          ]
+        },
+        {
+          "op": "jle",
+          "args": [
+            "num1"
+          ]
+        },
+        {
+          "label": "skip1_adv"
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "skip1"
+          ]
+        },
+        {
+          "label": "num1"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "after1"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "57"
+          ]
+        },
+        {
+          "op": "jg",
+          "args": [
+            "after1"
+          ]
+        },
+        {
+          "op": "imul",
+          "args": [
+            "%v1",
+            "%v1",
+            "10"
+          ]
+        },
+        {
+          "op": "sub",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "al"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "%v1",
+            "rax"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "num1"
+          ]
+        },
+        {
+          "label": "after1"
+        },
+        {
+          "label": "opsp"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "32"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "gotop"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "opsp"
+          ]
+        },
+        {
+          "label": "gotop"
+        },
+        {
+          "op": "test",
+          "args": [
+            "al",
+            "al"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "compute"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "takeop"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "57"
+          ]
+        },
+        {
+          "op": "jle",
+          "args": [
+            "parse2"
+          ],
+          "comment": "a digit -> no operator, default +"
+        },
+        {
+          "label": "takeop"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v3",
+            "rax"
+          ],
+          "comment": "store operator char"
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "label": "parse2"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "32"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "num2"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "parse2"
+          ]
+        },
+        {
+          "label": "num2"
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "byte ptr [r10]"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "jl",
+          "args": [
+            "compute"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "al",
+            "57"
+          ]
+        },
+        {
+          "op": "jg",
+          "args": [
+            "compute"
+          ]
+        },
+        {
+          "op": "imul",
+          "args": [
+            "%v2",
+            "%v2",
+            "10"
+          ]
+        },
+        {
+          "op": "sub",
+          "args": [
+            "al",
+            "48"
+          ]
+        },
+        {
+          "op": "movzx",
+          "args": [
+            "eax",
+            "al"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "%v2",
+            "rax"
+          ]
+        },
+        {
+          "op": "inc",
+          "args": [
+            "r10"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "num2"
+          ]
+        },
+        {
+          "label": "compute"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rax",
+            "%v1"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "%v3",
+            "45"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "do_sub"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "%v3",
+            "42"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "do_mul"
+          ]
+        },
+        {
+          "op": "cmp",
+          "args": [
+            "%v3",
+            "47"
+          ]
+        },
+        {
+          "op": "je",
+          "args": [
+            "do_div"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "rax",
+            "%v2"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "have"
+          ]
+        },
+        {
+          "label": "do_sub"
+        },
+        {
+          "op": "sub",
+          "args": [
+            "rax",
+            "%v2"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "have"
+          ]
+        },
+        {
+          "label": "do_mul"
+        },
+        {
+          "op": "imul",
+          "args": [
+            "rax",
+            "%v2"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "have"
+          ]
+        },
+        {
+          "label": "do_div"
+        },
+        {
+          "op": "test",
+          "args": [
+            "%v2",
+            "%v2"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "have"
+          ],
+          "comment": "divide by zero -> 0"
+        },
+        {
+          "op": "cqo",
+          "args": []
+        },
+        {
+          "op": "idiv",
+          "args": [
+            "%v2"
+          ]
+        },
+        {
+          "label": "have"
+        },
+        {
+          "op": "xor",
+          "args": [
+            "r8d",
+            "r8d"
+          ],
+          "comment": "sign flag"
+        },
+        {
+          "op": "test",
+          "args": [
+            "rax",
+            "rax"
+          ]
+        },
+        {
+          "op": "jns",
+          "args": [
+            "absdone"
+          ]
+        },
+        {
+          "op": "neg",
+          "args": [
+            "rax"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "label": "absdone"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:outbuf"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r11",
+            "r10"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "r11",
+            "31"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11]",
+            "10"
+          ],
+          "comment": "trailing newline"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "10"
+          ]
+        },
+        {
+          "op": "test",
+          "args": [
+            "rax",
+            "rax"
+          ]
+        },
+        {
+          "op": "jnz",
+          "args": [
+            "conv"
+          ]
+        },
+        {
+          "op": "dec",
+          "args": [
+            "r11"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11]",
+            "48"
+          ],
+          "comment": "value 0 -> '0'"
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "convdone"
+          ]
+        },
+        {
+          "label": "conv"
+        },
+        {
+          "op": "test",
+          "args": [
+            "rax",
+            "rax"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "convdone"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "rdx",
+            "rdx"
+          ]
+        },
+        {
+          "op": "div",
+          "args": [
+            "r9"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "dl",
+            "48"
+          ]
+        },
+        {
+          "op": "dec",
+          "args": [
+            "r11"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11]",
+            "dl"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "conv"
+          ]
+        },
+        {
+          "label": "convdone"
+        },
+        {
+          "op": "test",
+          "args": [
+            "r8d",
+            "r8d"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "nosign"
+          ]
+        },
+        {
+          "op": "dec",
+          "args": [
+            "r11"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "byte ptr [r11]",
+            "45"
+          ],
+          "comment": "'-'"
+        },
+        {
+          "label": "nosign"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:outbuf"
+          ]
+        },
+        {
+          "op": "add",
+          "args": [
+            "rax",
+            "32"
+          ]
+        },
+        {
+          "op": "sub",
+          "args": [
+            "rax",
+            "r11"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "%v0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rdx",
+            "r11"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8",
+            "rax"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ExitProcess"
+          ]
+        }
+      ]
+    }
+  ]
+}

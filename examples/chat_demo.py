@@ -69,10 +69,10 @@ def claude_model(message, feedback, iteration, history):
 
 
 class StandIn:
-    """Stand-in generator with a switchable .mode (like the real ChatbotGenerator)."""
+    """Stand-in generator standing in for the live model (like the real ChatbotGenerator)."""
     def __init__(self):
         from siryapsalot import modes
-        self.mode = modes.MODES["classic"]
+        self.mode = modes.get_mode()
 
     def __call__(self, message, feedback, iteration, history):
         return claude_model(message, feedback, iteration, history)
@@ -87,11 +87,9 @@ def main():
         print(f"{bot.mode.name}> " + bot.send(msg)["reply"])
 
     print("\n" + "#" * 72)
-    print(f"#  /switch yapzilla   →  now chatting with the deluxe persona")
-    print("#" * 72)
-    bot.switch("yapzilla")
-    print(f"\n💬 chatting with {bot.mode.name} — {bot.mode.tagline}\n")
-    for msg in ["build me a deluxe window with a button and sound",
+    print("#  full power, always — GUI, controls and sound (no personas to pick)")
+    print("#" * 72 + "\n")
+    for msg in ["build me a window with a button and sound",
                 "now make a window with a button that beeps when I click it"]:
         print("=" * 72 + f"\nyou> {msg}\n")
         print(f"{bot.mode.name}> " + bot.send(msg)["reply"])

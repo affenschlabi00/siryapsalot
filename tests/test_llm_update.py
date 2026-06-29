@@ -56,7 +56,7 @@ def _fake_gen(spec=None):
     class G:
         def __init__(self):
             self.backend = _FakeBackend()
-            self.mode = modes.MODES["classic"]
+            self.mode = modes.get_mode()
 
         def __call__(self, *a):
             return spec or {}
@@ -129,7 +129,7 @@ def test_web_info_reports_backend_and_models(build_dir):
         assert info["backend"] == "fake"
         assert "m1" in info["models"]
         assert set(info["backends"]) == {"openai", "anthropic", "ollama"}   # all providers offered
-        assert any(m["name"] == "Yapzilla" for m in info["modes"])
+        assert any(m["name"] == "Sir Yaps-a-Lot" for m in info["modes"])
     finally:
         httpd.shutdown()
 
@@ -237,7 +237,7 @@ def test_api_info_handler_fallback_serves_static_modes(build_dir, monkeypatch):
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     try:
         j = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/info", timeout=5).read())
-        assert any(m["name"] == "Yapzilla" for m in j["modes"])     # dropdowns can populate
+        assert any(m["name"] == "Sir Yaps-a-Lot" for m in j["modes"])     # dropdowns can populate
         assert "ollama" in j["backends"]
     finally:
         httpd.shutdown()

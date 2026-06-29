@@ -1,10 +1,11 @@
 """A local web GUI for the chatbot: open a browser, chat, download binaries.
 
 Pure stdlib (http.server) — no extra dependencies. `siryapsalot serve` starts it. The page lets
-you pick the persona (Lil Yapper / Yapzilla), the LLM provider (OpenAI / Anthropic / Ollama) and
-— per provider — which model it uses, chat to build .exe files, and hit an Update button to pull
-the newest code from the public repo (and switch branches). Choosing a provider refreshes the
+you pick the LLM provider (OpenAI / Anthropic / Ollama) and — per provider — which model it uses
+(paste a key for an unconfigured provider), chat to build .exe files, and hit an Update button to
+pull the newest code from the public repo (and switch branches). Choosing a provider refreshes the
 model list to that provider's models (e.g. pick Ollama → its local models; pick OpenAI → gpt-*).
+Common requests build from verified recipes, so they work even with no model configured.
 A 🧪 Eval button benchmarks the *selected* model: it runs the agent repair loop over the
 oracle-verified task suite in a background thread and streams a live pass/fail scoreboard, so you
 can see how good a given model is at turning intent into a correct binary.
@@ -25,8 +26,11 @@ class ChatService:
                  backend_name=None):
         if bot is None:
             from .chatbot import Chatbot, ChatbotGenerator
-            bot = Chatbot(ChatbotGenerator(mode=mode, model=model, backend_name=backend_name),
-                          out_dir=build_dir)
+            try:
+                gen = ChatbotGenerator(mode=mode, model=model, backend_name=backend_name)
+            except Exception:
+                gen = None        # no model configured — recipes + chat still work; add a key later
+            bot = Chatbot(gen, out_dir=build_dir)
         self.bot = bot
         self.build_dir = build_dir
         self._eval_lock = threading.Lock()
@@ -270,7 +274,6 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
 </style></head><body>
 <header>
  <b>Sir Yaps-a-Lot</b>
- <select id="mode" title="who you're chatting with"></select>
  <select id="backend" title="LLM provider"></select>
  <input id="apikey" type="password" autocomplete="off" placeholder="API key + Enter"
         title="paste an API key to use this provider" style="display:none;width:170px">
@@ -281,41 +284,44 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
  <button class="bar" id="upd" title="pull the newest version from git">⟳ Update</button>
  <span id="ver" style="color:var(--mut);font-size:12px"></span>
 </header>
-<div id="log"><div class="msg bot">Hi! Tell me what program you want and I'll build it.
-Try: "make me a tic-tac-toe game", "primes under 50", or (as Yapzilla) "a window with a button that beeps".</div></div>
+<div id="log"><div class="msg bot">Hi! I'm Sir Yaps-a-Lot — tell me what program you want and I'll build you a real Windows .exe.
+Try: "make me a calculator", "tic-tac-toe game", "primes under 50", or "a window with a button that beeps".</div></div>
 <form id="f"><input id="in" autocomplete="off" placeholder="make me a..."><button id="send">Build</button></form>
 <script>
 const log=document.getElementById('log'),inp=document.getElementById('in'),f=document.getElementById('f'),
-      send=document.getElementById('send'),modeSel=document.getElementById('mode'),
+      send=document.getElementById('send'),
       backendSel=document.getElementById('backend'),
       modelSel=document.getElementById('model'),branchSel=document.getElementById('branch'),
       upd=document.getElementById('upd'),ver=document.getElementById('ver'),
       evalbtn=document.getElementById('evalbtn'),apikey=document.getElementById('apikey');
-let curBackend=null;
+let curBackend=null,readyList=[];
+function ready(name){return readyList.indexOf(name)>=0;}
 function fill(sel,items,cur){sel.innerHTML='';items.forEach(it=>{const o=document.createElement('option');
   o.value=it.value;o.textContent=it.label;if(it.value===cur)o.selected=true;sel.appendChild(o);});}
 function add(cls,txt,dl){const d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;
   if(dl){const a=document.createElement('a');a.className='dl';a.href='/download/'+dl;a.textContent='⬇ download '+dl;
   a.setAttribute('download','');d.appendChild(document.createElement('br'));d.appendChild(a);}
   log.appendChild(d);log.scrollTop=log.scrollHeight;}
+function keyBox(){  // reveal the API-key box only when the chosen provider needs one
+  const sel=backendSel.value;
+  if(sel && sel!==curBackend && !ready(sel)){apikey.style.display='';apikey.placeholder=sel+' API key + Enter';}
+  else{apikey.style.display='none';}}
 async function loadInfo(){let j={};
   try{j=await (await fetch('/api/info')).json();}
   catch(err){add('sys','could not load settings ('+err+') — using defaults');}
-  const modes=(j.modes&&j.modes.length)?j.modes
-    :[{id:'classic',name:'Lil Yapper'},{id:'deluxe',name:'Yapzilla'}];
-  fill(modeSel,modes.map(m=>({value:m.id,label:m.name})),j.mode||modes[0].id);
   const backends=(j.backends&&j.backends.length)?j.backends
     :((j.backend&&j.backend!=='?')?[j.backend]:['openai','anthropic','ollama']);
-  const ready=j.ready||backends;
-  fill(backendSel,backends.map(b=>({value:b,label:(ready.indexOf(b)<0?'🔑 ':'')+b})),j.backend);
-  curBackend=j.backend;
+  readyList=j.ready||backends;
+  fill(backendSel,backends.map(b=>({value:b,label:(ready(b)?'':'🔑 ')+b})),j.backend);
+  curBackend=(j.backend&&j.backend!=='?')?j.backend:null;
   const models=j.models||[];
   fill(modelSel, models.length?models.map(m=>({value:m,label:m}))
     :((j.model&&j.model!=='?')?[{value:j.model,label:j.model}]:[]), j.model);
+  keyBox();
   if(j.available){fill(branchSel,(j.branches||[]).map(b=>({value:b,label:'🌿 '+b})),j.branch);
-    ver.textContent=(j.backend||'')+' · '+(j.model||'')+' · @'+(j.commit||'?');}
+    ver.textContent=(j.backend||'no model')+' · '+(j.model||'')+' · @'+(j.commit||'?');}
   else{branchSel.style.display='none';upd.title='updates need a git checkout (pip install -e .)';
-    ver.textContent=(j.backend||'')+' · '+(j.model||'');}}
+    ver.textContent=(j.backend||'no model — recipes work, add a key to unlock the rest')+' · '+(j.model||'');}}
 async function switchBackend(name,key){
   const prev=modelSel.innerHTML;modelSel.innerHTML='<option>…</option>';
   try{const body={backend:name};if(key)body.api_key=key;
@@ -327,24 +333,28 @@ async function switchBackend(name,key){
                   +'(Kept in memory for this session only.)');}
       else add('sys','⚠️ could not switch to '+name+': '+(j.error||''));
       return false;}
-    apikey.style.display='none';apikey.value='';curBackend=j.backend;
+    apikey.style.display='none';apikey.value='';curBackend=j.backend;if(!ready(j.backend))readyList.push(j.backend);
     fill(modelSel,(j.models||[]).map(m=>({value:m,label:m})),j.model);
     ver.textContent=(j.backend||'')+' · '+(j.model||'');
     add('sys','✅ now using '+(j.backend||name)+' / '+(j.model||'?'));
     return true;}
   catch(err){add('sys','backend switch error: '+err);modelSel.innerHTML=prev;return false;}}
-backendSel.onchange=()=>switchBackend(backendSel.value,'');
+backendSel.onchange=()=>{if(ready(backendSel.value)||backendSel.value===curBackend)switchBackend(backendSel.value,'');
+  else{keyBox();apikey.focus();}};
 apikey.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const k=apikey.value.trim();
   if(k)switchBackend(backendSel.value,k);}};
 f.onsubmit=async e=>{e.preventDefault();const m=inp.value.trim();if(!m)return;
-  if(backendSel.value!==curBackend){                 // make sure the chosen provider is active first
-    const ok=await switchBackend(backendSel.value,apikey.value.trim());if(!ok)return;}
+  // if the user picked a provider that's ready (or pasted a key), activate it before building;
+  // otherwise just build — recipes need no model, and custom asks will ask for one.
+  const key=apikey.value.trim();
+  if(backendSel.value!==curBackend && (ready(backendSel.value)||key)){
+    const ok=await switchBackend(backendSel.value,key);if(!ok)return;}
   add('me',m);inp.value='';send.disabled=true;
   const t=document.createElement('div');t.className='msg bot';t.textContent='⏳ starting…';
   log.appendChild(t);log.scrollTop=log.scrollHeight;
   let start;
   try{start=await (await fetch('/api/build',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:m,mode:modeSel.value,model:modelSel.value,backend:backendSel.value})})).json();}
+      body:JSON.stringify({message:m,model:modelSel.value,backend:backendSel.value})})).json();}
   catch(err){t.textContent='Error: '+err;send.disabled=false;return;}
   if(start.started===false){t.textContent=start.busy?'⏳ still finishing the last one — try again in a moment'
       :('Error: '+(start.error||'could not start'));send.disabled=false;return;}

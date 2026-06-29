@@ -45,7 +45,7 @@ def test_build_request_still_builds(build_dir):
         return _spec()
 
     bot = Chatbot(gen, out_dir=build_dir)
-    res = bot.send("make me a hello world program")
+    res = bot.send("build me a custom program for my taxes")   # not a recipe -> goes to the model
     assert res["success"] and not res.get("chat")
     assert res["path"] and os.path.exists(res["path"]) and calls["n"] >= 1
 

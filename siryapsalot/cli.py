@@ -21,8 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="siryapsalot",
         description="A chatbot that builds Windows binaries. Just run `siryapsalot` and chat.")
-    p.add_argument("-m", "--mode", default=None,
-                   help="who to chat with: 'lil yapper' (classic) or 'yapzilla' (deluxe GUI+sound)")
+    p.add_argument("-m", "--mode", default=None, help=argparse.SUPPRESS)  # deprecated: one identity now
     p.add_argument("--backend", default=None, choices=["openai", "anthropic", "ollama"],
                    help="LLM provider (default: auto-detect from env)")
     p.add_argument("--model", default=None, help="LLM model id (e.g. gpt-4o, claude-sonnet-4-6)")
@@ -168,9 +167,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "create":
         from .chatbot import Chatbot, ChatbotGenerator
         try:
-            bot = Chatbot(ChatbotGenerator(), max_iters=args.max_iters)
-        except RuntimeError as e:
-            print(f"the chatbot needs a model: {e}"); return 1
+            gen = ChatbotGenerator()
+        except Exception:
+            gen = None                 # recipes still build common programs without a model
+        bot = Chatbot(gen, max_iters=args.max_iters)
         res = bot.send(args.intent,
                        progress=lambda e: print(f"  … {e['message']}") if e.get("message") else None)
         print("\n" + res["reply"])
@@ -196,19 +196,24 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _chat(mode=None, model=None, backend=None) -> int:
-    from . import modes, updater
+    from . import updater
     from .chatbot import Chatbot, ChatbotGenerator
     try:
-        gen = ChatbotGenerator(mode=mode, model=model, backend_name=backend)
+        gen = ChatbotGenerator(model=model, backend_name=backend)
     except Exception as e:
-        print(e)                      # LLMUnavailable carries a friendly how-to message
-        return 1
+        print(f"(no AI model connected: {e})")
+        print("I can still build common programs from recipes — try `make me a calculator`. "
+              "Add a model anytime with /backend <name> or /key <provider> <api-key>.")
+        gen = None
     bot = Chatbot(gen)
 
     def banner():
         b = bot.backend
-        print(f"\n💬 chatting with **{bot.mode.name}** — {bot.mode.tagline}")
-        print(f"   model: {b.name} / {getattr(b, 'model', '?')}")
+        print(f"\n💬 Sir Yaps-a-Lot — {bot.mode.tagline}")
+        if b:
+            print(f"   model: {b.name} / {getattr(b, 'model', '?')}")
+        else:
+            print("   model: none (recipes only — add one with /backend <name> or /key <name> <key>)")
 
     def prog(ev):
         m = ev.get("message")
@@ -216,8 +221,8 @@ def _chat(mode=None, model=None, backend=None) -> int:
             print(f"   … {m}")
 
     print("Sir Yaps-a-Lot. Tell me what to build and I'll make you a .exe.")
-    print("Commands:  /who · /switch <persona> · /models · /model <id> · /backend <name> "
-          "· /key <provider> <api-key> · /update [branch] · /help · Ctrl-D quits")
+    print("Commands:  /models · /model <id> · /backend <name> · /key <provider> <api-key> "
+          "· /update [branch] · /help · Ctrl-D quits")
     banner()
     while True:
         try:
@@ -227,20 +232,14 @@ def _chat(mode=None, model=None, backend=None) -> int:
         if not msg:
             continue
         if msg in ("/help", "/?"):
-            print("  /who, /switch <persona>, /models, /model <id>, /backend openai|anthropic|ollama,"
+            print("  /models, /model <id>, /backend openai|anthropic|ollama,"
                   " /key <provider> <api-key>, /update [branch]"); continue
-        if msg == "/who":
-            print("Personas:\n" + modes.listing() + f"\n(currently: {bot.mode.name})"); continue
         if msg == "/models":
             try:
                 print("  " + ", ".join(bot.models()))
             except Exception as e:
                 print("  (couldn't list models:", e, ")")
             continue
-        if msg.startswith("/switch"):
-            if bot.switch(msg[len("/switch"):].strip()) is None:
-                print("  unknown persona; try /who")
-            banner(); continue
         if msg.startswith("/model "):
             bot.set_model(msg[len("/model "):].strip()); banner(); continue
         if msg.startswith("/backend"):

@@ -93,7 +93,10 @@ the emitted `.exe` is a genuine Win32 GUI program that shows a window on real Wi
 self-tests GUI programs with `expect_dialog_contains` / `expect_window_contains`. (Interactive
 control/click handling was added later — see **D11**; real-time input and graphics remain out.)
 
-## D9 — Switchable personas (Lil Yapper / Yapzilla) + sound & controls
+## D9 — Switchable personas (Lil Yapper / Yapzilla) + sound & controls  — SUPERSEDED by D15
+> Superseded: personas were removed in **D15**. There is now one identity, always at full power.
+> The sound & controls work below still applies (it's just always on). Kept for history.
+
 The chatbot has two switchable personas (`siryapsalot/modes.py`) — like a model switcher, but for
 the builder's vibe and capability surface, not the LLM:
 - **Lil Yapper** (classic): humble, console apps + basic windows/dialogs; sound APIs are *not*
@@ -213,6 +216,30 @@ a build looked frozen for minutes.
   `GET /api/build/status` for the latest step + final result, so the page streams progress instead
   of blocking. `/api/build` is now start-and-poll (one build at a time; a second returns
   `{started:false, busy:true}`). `ChatService.message` stays synchronous as the testable core.
+
+## D15 — One identity, always full power + verified recipes (supersedes D9 personas)
+Two changes for reliability and simplicity, requested after a frontier model still struggled with
+the bespoke IR.
+
+- **No more personas.** The Lil Yapper / Yapzilla split (D9) is gone. `modes.py` is now a single
+  identity, **Sir Yaps-a-Lot**, always at full power — every capability (console, positioned
+  drawing, real windows, clickable buttons/controls, sound, interactive events) is always
+  advertised. `get_mode()` ignores its argument; `chatbot_system_prompt()` no longer branches on a
+  mode; the web mode dropdown and the CLI `/switch` / `/who` / `-m` are removed (the flag/params
+  remain as ignored no-ops for compatibility).
+- **Verified recipes** (`siryapsalot/recipes.py`). The IR is hard for an LLM to emit correctly, so
+  common requests don't gamble on the model: a regex maps them to a known-good `examples/*.ir.json`
+  (each covered by the test suite) which is guaranteed to build and pass. `Chatbot.send` tries a
+  recipe first (after small talk), so "make me a calculator / fizzbuzz / tic-tac-toe / a beeping
+  button" are instant and correct **with or without a model**. A new, harness-verified
+  `examples/calculator.ir.json` (signed +-*/ with atoi/itoa) backs the most-requested ask.
+- **Works with no model at all.** `Chatbot` accepts `generator=None`; `ChatService` and the CLI no
+  longer hard-fail when no provider is configured — recipes + small talk still work, and a custom
+  request returns a friendly "connect a model (or paste a key)" message. `set_backend` on a
+  model-less bot creates the generator on the spot.
+- **Stronger model path for the long tail.** The agent prompt gained a pre-answer checklist of the
+  usual failure modes and two more worked examples (factorial = atoi/itoa, hello_window = a window
+  proc); the chatbot's default repair budget went 6 → 8.
 
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,

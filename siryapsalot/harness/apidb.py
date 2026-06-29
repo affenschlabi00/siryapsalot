@@ -143,7 +143,7 @@ SIGNATURES: dict[str, dict] = {
                   "arg_registers": ["rcx", "rdx"], "returns": "rax (HICON)"},
     "SetWindowTextA": {"dll": "user32.dll", "signature": "BOOL SetWindowTextA(HWND, LPCSTR)",
                        "arg_registers": ["rcx", "rdx"], "returns": "rax (BOOL)"},
-    # --- audio (Yapzilla mode): these actually play sound on Windows ---
+    # --- audio: these actually play sound on Windows ---
     "Beep": {"dll": "kernel32.dll", "signature": "BOOL Beep(DWORD dwFreq, DWORD dwDuration)",
              "arg_registers": ["rcx", "rdx"], "returns": "rax (BOOL)"},
     "MessageBeep": {"dll": "user32.dll", "signature": "BOOL MessageBeep(UINT uType)",
