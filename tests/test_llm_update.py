@@ -174,3 +174,62 @@ def test_web_set_backend_failure_keeps_current(build_dir, monkeypatch):
     out = svc.set_backend("openai")
     assert out["ok"] is False and "no key" in out["error"]
     assert svc._backend_info()["backend"] == "fake"                 # unchanged on failure
+
+
+# --- robustness: a failure in one part of /api/info must never empty the dropdowns ----------
+def _raise(exc):
+    def _f(*a, **k):
+        raise exc
+    return _f
+
+
+def test_info_survives_updater_failure(build_dir, monkeypatch):
+    """The empty-dropdown bug: git/updater blowing up used to take down the whole response."""
+    svc = ChatService(bot=Chatbot(_fake_gen()), build_dir=build_dir)
+    monkeypatch.setattr(updater, "status", _raise(FileNotFoundError("git not found")))
+    i = svc.info()
+    assert [m["name"] for m in i["modes"]]                          # personas still present
+    assert i["backends"] == ["fake"]                               # provider still present
+    assert i["model"] == "m1"
+    assert i["available"] is False                                  # degraded, not crashed
+
+
+def test_info_survives_backend_listing_failure(build_dir):
+    class Boom(llm.LLMBackend):
+        name = "openai"
+        model = "gpt-4o"
+
+        def list_models(self):
+            raise RuntimeError("api down")
+
+        def chat(self, *a, **k):
+            return "{}"
+
+    g = _fake_gen()
+    g.backend = Boom()
+    svc = ChatService(bot=Chatbot(g), build_dir=build_dir)
+    i = svc.info()
+    assert i["modes"] and i["backends"] == ["openai"]               # still usable
+    assert i["model"] == "gpt-4o" and i["models"] == []             # model known, list just empty
+
+
+def test_api_info_handler_fallback_serves_static_modes(build_dir, monkeypatch):
+    """Even if info() itself explodes, the HTTP layer still hands the UI personas + providers."""
+    svc = ChatService(bot=Chatbot(_fake_gen()), build_dir=build_dir)
+    monkeypatch.setattr(svc, "info", _raise(RuntimeError("boom")))
+    httpd = HTTPServer(("127.0.0.1", 0), make_handler(svc))
+    port = httpd.server_address[1]
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        j = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/info", timeout=5).read())
+        assert any(m["name"] == "Yapzilla" for m in j["modes"])     # dropdowns can populate
+        assert "ollama" in j["backends"]
+    finally:
+        httpd.shutdown()
+
+
+def test_updater_status_degrades_without_git(monkeypatch):
+    monkeypatch.setattr(updater, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", _raise(FileNotFoundError("git")))
+    s = updater.status()
+    assert s["available"] is False and "git" in s["reason"].lower()  # no exception escapes

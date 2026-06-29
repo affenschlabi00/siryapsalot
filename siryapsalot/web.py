@@ -69,18 +69,33 @@ class ChatService:
             return {"ok": False, "error": str(e), **self._backend_info()}
 
     def info(self) -> dict:
-        from . import llm, modes, updater
-        bi = self._backend_info()
-        backends = llm.available_backends()
-        if bi["backend"] not in backends and bi["backend"] != "?":
-            backends = [bi["backend"]] + backends      # always show the one in use
-        return {
-            **bi,
-            "backends": backends,
+        """Everything the UI needs to populate its dropdowns. Built defensively: a failure in any
+        one part (model listing, provider probe, git) must never empty the others — the personas
+        and provider list always come back so the page is never dead."""
+        from . import llm, modes
+        out = {
             "modes": [{"id": m.id, "name": m.name} for m in modes.MODES.values()],
             "mode": self.bot.mode.id if self.bot.mode else None,
-            **updater.status(),
+            "backend": "?", "model": "?", "models": [],
         }
+        try:
+            out.update(self._backend_info())
+        except Exception as e:
+            out["error"] = f"backend: {e}"
+        try:
+            backends = llm.available_backends()
+        except Exception:
+            backends = []
+        cur = out.get("backend")
+        if cur and cur != "?" and cur not in backends:
+            backends = [cur] + backends                # always offer the provider currently in use
+        out["backends"] = backends
+        try:
+            from . import updater
+            out.update(updater.status())
+        except Exception as e:
+            out.update({"available": False, "reason": f"update check failed: {e}"})
+        return out
 
     def update(self, branch=None) -> dict:
         from . import updater
@@ -237,10 +252,18 @@ function add(cls,txt,dl){const d=document.createElement('div');d.className='msg 
   if(dl){const a=document.createElement('a');a.className='dl';a.href='/download/'+dl;a.textContent='⬇ download '+dl;
   a.setAttribute('download','');d.appendChild(document.createElement('br'));d.appendChild(a);}
   log.appendChild(d);log.scrollTop=log.scrollHeight;}
-async function loadInfo(){const j=await (await fetch('/api/info')).json();
-  fill(modeSel,j.modes.map(m=>({value:m.id,label:m.name})),j.mode);
-  fill(backendSel,(j.backends||[j.backend]).map(b=>({value:b,label:b})),j.backend);
-  fill(modelSel,(j.models||[]).map(m=>({value:m,label:m})),j.model);
+async function loadInfo(){let j={};
+  try{j=await (await fetch('/api/info')).json();}
+  catch(err){add('sys','could not load settings ('+err+') — using defaults');}
+  const modes=(j.modes&&j.modes.length)?j.modes
+    :[{id:'classic',name:'Lil Yapper'},{id:'deluxe',name:'Yapzilla'}];
+  fill(modeSel,modes.map(m=>({value:m.id,label:m.name})),j.mode||modes[0].id);
+  const backends=(j.backends&&j.backends.length)?j.backends
+    :((j.backend&&j.backend!=='?')?[j.backend]:['openai','anthropic','ollama']);
+  fill(backendSel,backends.map(b=>({value:b,label:b})),j.backend);
+  const models=j.models||[];
+  fill(modelSel, models.length?models.map(m=>({value:m,label:m}))
+    :((j.model&&j.model!=='?')?[{value:j.model,label:j.model}]:[]), j.model);
   if(j.available){fill(branchSel,(j.branches||[]).map(b=>({value:b,label:'🌿 '+b})),j.branch);
     ver.textContent=(j.backend||'')+' · '+(j.model||'')+' · @'+(j.commit||'?');}
   else{branchSel.style.display='none';upd.title='updates need a git checkout (pip install -e .)';
@@ -273,7 +296,7 @@ evalbtn.onclick=async()=>{evalbtn.disabled=true;
     if(s.running)foot='  …running ('+s.done+'/'+s.total+')';
     else if(s.summary)foot='Score: '+s.summary.passed+'/'+s.summary.total+
       ' tasks ('+Math.round(s.summary.score*100)+'%)';
-    card.textContent=[head].concat(rows).concat(foot?[foot]:[]).join('\n');
+    card.textContent=[head].concat(rows).concat(foot?[foot]:[]).join('\\n');
     log.scrollTop=log.scrollHeight;}
   let start;
   try{start=await (await fetch('/api/eval',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -319,11 +342,22 @@ def make_handler(service: ChatService):
         def do_GET(self):
             if self.path in ("/", "/index.html") or self.path.startswith("/?"):
                 self._send(200, "text/html; charset=utf-8", INDEX_HTML.encode())
+            elif self.path == "/favicon.ico":
+                self.send_response(204)               # no icon — keep the console clean
+                self.end_headers()
             elif self.path == "/api/info":
                 try:
                     self._json(service.info())
                 except Exception as e:
-                    self._json({"backend": "?", "model": "?", "models": [], "modes": [],
+                    # last-ditch: still hand the UI the static personas/providers so it isn't dead
+                    try:
+                        from . import modes as _modes
+                        md = [{"id": m.id, "name": m.name} for m in _modes.MODES.values()]
+                    except Exception:
+                        md = []
+                    self._json({"backend": "?", "model": "?", "models": [], "modes": md,
+                                "mode": (md[0]["id"] if md else None),
+                                "backends": ["openai", "anthropic", "ollama"],
                                 "available": False, "error": str(e)})
             elif self.path == "/api/eval/status":
                 self._json(service.eval_status())

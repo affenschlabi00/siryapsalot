@@ -34,7 +34,15 @@ def _git(*args, timeout: int = 120) -> subprocess.CompletedProcess:
     if not root:
         raise RuntimeError("not a git checkout — install with `pip install -e .` from a clone "
                            "to enable updates.")
-    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, timeout=timeout)
+    try:
+        return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+                              timeout=timeout)
+    except FileNotFoundError as e:                     # git not installed / not on PATH (common on Windows)
+        return subprocess.CompletedProcess(args, 127, stdout="", stderr=f"git not found: {e}")
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(args, 124, stdout="", stderr="git timed out")
+    except OSError as e:
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr=str(e))
 
 
 def current_branch() -> str | None:
@@ -63,7 +71,10 @@ def list_branches() -> list[str]:
 def status() -> dict:
     if not available():
         return {"available": False, "reason": "not a git checkout (use `pip install -e .`)"}
-    return {"available": True, "branch": current_branch(), "commit": current_commit(),
+    branch = current_branch()
+    if branch is None:                                 # .git present but git unusable (not on PATH)
+        return {"available": False, "reason": "git not found on PATH"}
+    return {"available": True, "branch": branch, "commit": current_commit(),
             "branches": list_branches()}
 
 

@@ -29,6 +29,33 @@ def test_index_html_is_a_chat_page():
     assert "<form" in INDEX_HTML and "/api/build" in INDEX_HTML
 
 
+def test_index_html_js_string_literals_are_single_line():
+    """Regression: a raw newline inside a ' or " JS string literal (e.g. writing join('\\n') in
+    the Python source, where \\n becomes a real newline) breaks the ENTIRE <script>, so no handler
+    binds and every dropdown stays empty. Scan the served JS and fail on any such literal."""
+    import re
+    js = re.search(r"<script>(.*)</script>", INDEX_HTML, re.S).group(1)
+    quote = None
+    esc = False
+    line = 1
+    for ch in js:
+        if quote:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == quote:
+                quote = None
+            elif ch == "\n" and quote in ("'", '"'):
+                raise AssertionError(f"unterminated {quote!r} string literal at <script> line {line}"
+                                     " — a raw newline leaked into a JS string (use \\\\n in the "
+                                     "Python source).")
+        elif ch in ("'", '"', "`"):
+            quote = ch
+        if ch == "\n":
+            line += 1
+
+
 def test_web_server_roundtrip(build_dir):
     svc = ChatService(bot=_fake_bot(build_dir), build_dir=build_dir)
     httpd = HTTPServer(("127.0.0.1", 0), make_handler(svc))
