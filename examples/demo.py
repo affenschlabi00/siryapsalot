@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end demonstration of Sir Yaps-a-Lot (bytewright).
+"""End-to-end demonstration of Sir Yaps-a-Lot (siryapsalot).
 
 Run:  python examples/demo.py
 Shows: IR -> deterministic backend -> real PE -> emulated harness, then the agent's
@@ -8,10 +8,10 @@ self-repair loop, then the eval suite — the full Phase 0-3 story.
 import json
 import os
 
-from bytewright import harness
-from bytewright.agent import (CallableGenerator, ScriptedGenerator, break_factorial_digit,
+from siryapsalot import harness
+from siryapsalot.agent import (CallableGenerator, ScriptedGenerator, break_factorial_digit,
                               build_from_intent, make_buggy, solve)
-from bytewright.eval import TASKS_BY_NAME, library_get_ir, run_suite
+from siryapsalot.eval import TASKS_BY_NAME, library_get_ir, run_suite
 
 HERE = os.path.dirname(__file__)
 
@@ -45,7 +45,7 @@ def main():
     print(f"   ended: {t['summary']['ended']}")
 
     rule("5. THE HEADLINE: describe a program in plain English -> get a working .exe")
-    # In production this generator is a live model (bytewright create / chat, with
+    # In production this generator is a live model (siryapsalot create / chat, with
     # ANTHROPIC_API_KEY). Here a CallableGenerator stands in, mapping the request to IR.
     gen = CallableGenerator(lambda intent, fb, it:
                             json.load(open(os.path.join(HERE, "fibonacci.ir.json"))))

@@ -59,12 +59,12 @@
     {
       "label": "classname",
       "type": "bytes",
-      "value": "BytewrightWindow\u0000"
+      "value": "Sir Yaps-a-LotWindow\u0000"
     },
     {
       "label": "title",
       "type": "bytes",
-      "value": "Hello from a Bytewright window!\u0000"
+      "value": "Hello from a Sir Yaps-a-Lot window!\u0000"
     },
     {
       "label": "wc",

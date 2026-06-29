@@ -5,10 +5,10 @@ server is running (or `OLLAMA_MODEL` is set) we use that — fully local, free, 
 chatbot doesn't care which; it just calls `backend.chat(system, messages)`.
 
 Env:
-  ANTHROPIC_API_KEY   use Anthropic (model from BYTEWRIGHT_MODEL, default claude-sonnet-4-6)
+  ANTHROPIC_API_KEY   use Anthropic (model from SIRYAPSALOT_MODEL, default claude-sonnet-4-6)
   OLLAMA_MODEL        use a local Ollama model, e.g. "qwen2.5-coder:7b" or "llama3.1"
   OLLAMA_HOST         Ollama server (default http://localhost:11434)
-  BYTEWRIGHT_BACKEND  force "anthropic" or "ollama"
+  SIRYAPSALOT_BACKEND  force "anthropic" or "ollama"
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class AnthropicBackend(LLMBackend):
     def __init__(self, model: str | None = None, max_tokens: int = 8192):
         import anthropic
         self.client = anthropic.Anthropic()
-        self.model = model or os.environ.get("BYTEWRIGHT_MODEL", "claude-sonnet-4-6")
+        self.model = model or os.environ.get("SIRYAPSALOT_MODEL", "claude-sonnet-4-6")
         self.max_tokens = max_tokens
 
     def chat(self, system, messages, temperature=0.0, force_json=True):
@@ -58,7 +58,7 @@ class OllamaBackend(LLMBackend):
     def __init__(self, model: str | None = None, host: str | None = None):
         self.host = (host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")).rstrip("/")
         self.model = (model or os.environ.get("OLLAMA_MODEL")
-                      or os.environ.get("BYTEWRIGHT_MODEL", "llama3.1"))
+                      or os.environ.get("SIRYAPSALOT_MODEL", "llama3.1"))
 
     def chat(self, system, messages, temperature=0.0, force_json=True):
         payload = {
@@ -82,7 +82,7 @@ def _ollama_reachable(host: str) -> bool:
 
 def make_backend(prefer: str | None = None) -> LLMBackend:
     """Pick a backend: explicit > Anthropic key > running Ollama. Raises a helpful error if none."""
-    prefer = prefer or os.environ.get("BYTEWRIGHT_BACKEND")
+    prefer = prefer or os.environ.get("SIRYAPSALOT_BACKEND")
     if prefer == "anthropic" or (prefer is None and os.environ.get("ANTHROPIC_API_KEY")):
         try:
             return AnthropicBackend()

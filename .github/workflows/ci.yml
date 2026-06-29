@@ -26,9 +26,9 @@ jobs:
       - name: Build the worked examples (smoke)
         run: |
           for ex in examples/*.ir.json; do
-            python -m bytewright.cli build "$ex" -o "build/$(basename "${ex%.ir.json}").exe"
+            python -m siryapsalot.cli build "$ex" -o "build/$(basename "${ex%.ir.json}").exe"
           done
       - name: Run the eval task suite
-        run: python -m bytewright.cli eval
+        run: python -m siryapsalot.cli eval
       - name: Unit + differential tests
         run: python -m pytest -q

@@ -8,7 +8,7 @@ real and runnable now:
   - to_sft: turns harvested (intent -> IR/bytes) samples and repair trajectories into chat-format
     supervised fine-tuning pairs.
 
-Together with bytewright.reward (the ladder) and bytewright.dataset (the harvester), this is the
+Together with siryapsalot.reward (the ladder) and siryapsalot.dataset (the harvester), this is the
 scaffolding to distill then RL a model that emits binaries.
 """
 from __future__ import annotations

@@ -2,10 +2,10 @@
 import json
 import os
 
-from bytewright import dataset
-from bytewright.eval import TASKS_BY_NAME, library_get_ir
-from bytewright.reward import reward
-from bytewright.training import RLEnv, to_sft
+from siryapsalot import dataset
+from siryapsalot.eval import TASKS_BY_NAME, library_get_ir
+from siryapsalot.reward import reward
+from siryapsalot.training import RLEnv, to_sft
 from conftest import load_example
 
 

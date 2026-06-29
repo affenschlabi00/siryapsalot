@@ -11,7 +11,7 @@ import json
 from ..agent import prompt as _prompt
 
 _RAW_SYSTEM = (
-    "You emit programs as a raw Bytewright object: literal x86-64 machine-code bytes plus a "
+    "You emit programs as a raw Sir Yaps-a-Lot object: literal x86-64 machine-code bytes plus a "
     "relocation list. Reply with ONLY a JSON object {metadata:{name,subsystem,entry_offset}, "
     "code:'<hex>', imports:[...], data:[...], relocs:[{offset,kind,target}]}."
 )
@@ -26,7 +26,7 @@ def _pair(system: str, user: str, assistant: str, kind: str) -> dict:
 
 
 def to_sft(samples: list[dict]) -> list[dict]:
-    """Convert dataset samples (see bytewright.dataset) into SFT chat pairs."""
+    """Convert dataset samples (see siryapsalot.dataset) into SFT chat pairs."""
     sys_ir = _prompt.system_prompt()
     out: list[dict] = []
     for s in samples:

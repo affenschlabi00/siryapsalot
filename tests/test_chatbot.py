@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from bytewright.chatbot import Chatbot, ChatbotGenerator
+from siryapsalot.chatbot import Chatbot, ChatbotGenerator
 from conftest import load_example
 
 
@@ -64,7 +64,7 @@ def test_chatbot_repairs_after_crash(build_dir):
     ("tetris_board.ir.json", "", "+----------+"),
 ])
 def test_new_examples_run(build_dir, example, stdin, must_contain):
-    from bytewright import harness
+    from siryapsalot import harness
     out = os.path.join(build_dir, example.replace(".ir.json", ".exe"))
     rep = harness.build_binary(load_example(example), out)
     assert rep["ok"], rep["errors"]
@@ -74,7 +74,7 @@ def test_new_examples_run(build_dir, example, stdin, must_contain):
 
 def test_interactive_guessing_game(build_dir):
     """A turn-based game: multiple line-buffered reads in one run, stops at the win."""
-    from bytewright import harness
+    from siryapsalot import harness
     out = os.path.join(build_dir, "guess.exe")
     harness.build_binary(load_example("guess.ir.json"), out)
     r = harness.run(out, stdin="50\n40\n42\n99\n")
@@ -84,7 +84,7 @@ def test_interactive_guessing_game(build_dir):
 
 def test_tictactoe_game(build_dir):
     """A real playable game: move parsing, board rendering, win + draw detection."""
-    from bytewright import harness
+    from siryapsalot import harness
     out = os.path.join(build_dir, "tictactoe.exe")
     rep = harness.build_binary(load_example("tictactoe.ir.json"), out)
     assert rep["ok"], rep["errors"]
@@ -98,7 +98,7 @@ def test_tictactoe_game(build_dir):
 
 
 def test_prime_says_not_prime(build_dir):
-    from bytewright import harness
+    from siryapsalot import harness
     out = os.path.join(build_dir, "prime.exe")
     harness.build_binary(load_example("prime.ir.json"), out)
     assert harness.run(out, stdin="12")["stdout"] == "not prime\n"

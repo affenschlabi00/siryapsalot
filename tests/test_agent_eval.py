@@ -1,8 +1,8 @@
 """Phase 3: the eval suite passes via the harness, and the repair loop converges."""
 import json
 
-from bytewright.agent import ScriptedGenerator, break_factorial_digit, make_buggy, solve
-from bytewright.eval import TASKS_BY_NAME, library_get_ir, run_suite
+from siryapsalot.agent import ScriptedGenerator, break_factorial_digit, make_buggy, solve
+from siryapsalot.eval import TASKS_BY_NAME, library_get_ir, run_suite
 
 
 def test_eval_suite_all_pass():
@@ -25,7 +25,7 @@ def test_repair_loop_converges():
 
 
 def test_library_generator_solves_in_one_iteration():
-    from bytewright.agent import LibraryGenerator
+    from siryapsalot.agent import LibraryGenerator
     task = TASKS_BY_NAME["hello"]
     res = solve(task, LibraryGenerator(), max_iters=3)
     assert res["success"] and res["iterations"] == 1

@@ -5,7 +5,7 @@ import lief
 import pytest
 from capstone import CS_ARCH_X86, CS_MODE_64, Cs
 
-from bytewright.backend import build_binary, validate_ir
+from siryapsalot.backend import build_binary, validate_ir
 from conftest import load_example
 
 
@@ -76,7 +76,7 @@ def test_relocations_resolve_to_real_targets(build_dir):
 
 
 def test_regalloc_excludes_model_used_registers():
-    from bytewright.backend.regalloc import allocate, model_used_callee_saved
+    from siryapsalot.backend.regalloc import allocate, model_used_callee_saved
     proc = {"label": "m", "instructions": [
         {"op": "xor", "args": ["ebx", "ebx"]},   # model uses rbx (via ebx) directly
         {"op": "mov", "args": ["%v0", "1"]}]}
@@ -112,7 +112,7 @@ def test_vreg_does_not_collide_with_model_register(build_dir):
             {"op": "mov", "args": ["ecx", "0"]},
             {"op": "call", "args": ["import:kernel32.dll!ExitProcess"]}]}],
     }
-    from bytewright import harness
+    from siryapsalot import harness
     out = os.path.join(build_dir, "noclash.exe")
     assert harness.build_binary(ir, out)["ok"]
     assert harness.run(out)["stdout"] == "A"

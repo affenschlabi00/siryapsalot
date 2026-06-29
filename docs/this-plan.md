@@ -2,8 +2,8 @@
 
 This is the condensed source-of-truth plan the repository implements. The full reusable
 artifacts it calls for — the **IR spec** and the **MCP tool schemas** — now live as code:
-`schema/ir.schema.json` and the functions in `bytewright/harness/` (mirrored by
-`bytewright/mcp_server.py`). See [`design.md`](design.md) for how it was built and
+`schema/ir.schema.json` and the functions in `siryapsalot/harness/` (mirrored by
+`siryapsalot/mcp_server.py`). See [`design.md`](design.md) for how it was built and
 [`../decisions.md`](../decisions.md) for the decision log.
 
 ## TL;DR
@@ -70,7 +70,7 @@ Win32 APIs (`import:dll!func`), data (`data:label`), and virtual registers (`%vN
 checkable and round-trippable. `metadata` (name/subsystem/entry) · `imports` · `data` · `code`
 (procedures of instructions). Worked example: [`../examples/hello.ir.json`](../examples/hello.ir.json).
 
-## Harness tools (summary — see `bytewright/harness/`)
+## Harness tools (summary — see `siryapsalot/harness/`)
 
 `build_binary` · `validate_pe` · `disassemble` · `run` · `trace` · `inspect` ·
 `crash_analysis` · `diff_behavior` · `list_imports` · `resolve_api`. These are the agent's

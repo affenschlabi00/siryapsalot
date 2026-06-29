@@ -53,7 +53,7 @@ class Chatbot:
         # generator: callable(message, feedback, iteration, history) -> spec dict
         #            spec = {program_name, explanation, ir, self_tests:[{stdin, expect_*}]}
         # builder:   callable(program, out_path) -> build report. Default builds IR; pass
-        #            bytewright.raw.build_from_obj to build from raw machine-code bytes instead
+        #            siryapsalot.raw.build_from_obj to build from raw machine-code bytes instead
         #            (same self-test + repair loop, the model just emits bytes).
         self.generator = generator
         self.max_iters = max_iters
@@ -149,7 +149,7 @@ class Chatbot:
 class ChatbotGenerator:
     """The live model behind the chatbot — Anthropic API or a local Ollama model.
 
-    Picks a backend automatically (see bytewright.llm.make_backend): Anthropic if
+    Picks a backend automatically (see siryapsalot.llm.make_backend): Anthropic if
     ANTHROPIC_API_KEY is set, otherwise a running/ configured Ollama model. No key required.
     """
 

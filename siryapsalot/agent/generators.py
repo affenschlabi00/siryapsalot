@@ -51,7 +51,7 @@ class LLMGenerator:
     """Scaffold a frontier model through the harness (Plan §3, the real v1 path).
 
     Turns a plain-English request into IR using whatever model backend is available — the
-    Anthropic API or a local Ollama model (see bytewright.llm.make_backend; no key required for
+    Anthropic API or a local Ollama model (see siryapsalot.llm.make_backend; no key required for
     Ollama). The system prompt is assembled from the live schema, API surface, and worked
     examples (prompt.py) so it can't drift from the backend.
     """

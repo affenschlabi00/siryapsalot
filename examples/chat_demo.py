@@ -3,14 +3,14 @@
 
 Shows the product experience: you send plain-English messages, the bot builds .exe files,
 self-tests them, and replies. The `claude_model` function stands in for the live model
-(`bytewright.chatbot.ChatbotGenerator`), returning the IR + self-tests a model would emit.
+(`siryapsalot.chatbot.ChatbotGenerator`), returning the IR + self-tests a model would emit.
 
 Run:  python examples/chat_demo.py
 """
 import json
 import os
 
-from bytewright.chatbot import Chatbot
+from siryapsalot.chatbot import Chatbot
 
 HERE = os.path.dirname(__file__)
 
@@ -41,7 +41,7 @@ def claude_model(message, feedback, iteration, history):
                      [{"stdin": "", "expect_contains": "+----------+"}])
     if "window" in m:
         return _spec("hello_window", "opens a real Win32 window (640x480)",
-                     [{"stdin": "", "expect_window_contains": "Bytewright"}])
+                     [{"stdin": "", "expect_window_contains": "Sir Yaps-a-Lot"}])
     if "message box" in m or "popup" in m or "pop up" in m or "gui" in m:
         return _spec("hello_gui", "pops up a Windows message box (a GUI binary)",
                      [{"stdin": "", "expect_dialog_contains": "GUI binary"}])

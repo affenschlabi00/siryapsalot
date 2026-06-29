@@ -1,6 +1,6 @@
 """A local web GUI for the chatbot: open a browser, chat, download binaries.
 
-Pure stdlib (http.server) — no extra dependencies. `bytewright serve` starts it; the page POSTs
+Pure stdlib (http.server) — no extra dependencies. `siryapsalot serve` starts it; the page POSTs
 each message to /api/build, which runs the chatbot and returns the reply plus a download link to
 the freshly built .exe.
 """
@@ -127,7 +127,7 @@ def make_handler(service: ChatService):
 def serve(port: int = 8765, host: str = "127.0.0.1", bot=None):
     service = ChatService(bot=bot)
     httpd = HTTPServer((host, port), make_handler(service))
-    print(f"bytewright chat UI → http://{host}:{port}   (Ctrl-C to stop)")
+    print(f"siryapsalot chat UI → http://{host}:{port}   (Ctrl-C to stop)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

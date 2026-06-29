@@ -26,7 +26,7 @@ def _example(name: str) -> str:
 
 
 RULES = """\
-You write programs as Bytewright IR: a JSON object of real x86-64 instructions with symbolic
+You write programs as Sir Yaps-a-Lot IR: a JSON object of real x86-64 instructions with symbolic
 names. A trusted deterministic backend turns your IR into a real Windows .exe, so you never
 compute byte offsets, encodings, or addresses.
 
@@ -87,7 +87,7 @@ Respond with ONLY a single JSON object (no prose, no markdown fences):
 {
   "program_name": "<short snake_case name>",
   "explanation": "<one friendly sentence describing what the program does>",
-  "ir": { ... a complete Bytewright IR object, per the rules and schema below ... },
+  "ir": { ... a complete Sir Yaps-a-Lot IR object, per the rules and schema below ... },
   "self_tests": [
     {"stdin": "<input, or empty string>", "expect_contains": "<substring stdout must contain>"}
   ]

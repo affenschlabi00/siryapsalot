@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from bytewright.agent import (AnthropicGenerator, CallableGenerator, build_from_intent)
+from siryapsalot.agent import (AnthropicGenerator, CallableGenerator, build_from_intent)
 from conftest import load_example
 
 

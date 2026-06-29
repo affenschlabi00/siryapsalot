@@ -1,10 +1,10 @@
 """Phase 4/5 starters: the dense reward ladder and the dataset harvester."""
 import os
 
-from bytewright import dataset
-from bytewright.agent import break_factorial_digit, make_buggy
-from bytewright.eval import TASKS_BY_NAME, library_get_ir
-from bytewright.reward import reward
+from siryapsalot import dataset
+from siryapsalot.agent import break_factorial_digit, make_buggy
+from siryapsalot.eval import TASKS_BY_NAME, library_get_ir
+from siryapsalot.reward import reward
 
 
 def test_reward_is_monotone_in_correctness():
@@ -30,7 +30,7 @@ def test_reward_gives_partial_gradient_on_wrong_output():
 
 
 def test_all_reference_solutions_score_full():
-    from bytewright.eval import TASKS
+    from siryapsalot.eval import TASKS
     for task in TASKS:
         r = reward(library_get_ir(task), task)
         assert r["score"] >= 1.0, (task["name"], r)

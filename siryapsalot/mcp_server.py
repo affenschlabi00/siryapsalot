@@ -2,7 +2,7 @@
 
 These are the model's senses: construct a binary, statically validate it, read it back,
 execute it, record an execution movie, snapshot state, decode crashes, diff against an
-oracle, and learn how to call a Win32 API. Run with:  python -m bytewright.mcp_server
+oracle, and learn how to call a Win32 API. Run with:  python -m siryapsalot.mcp_server
 (stdio transport, as MCP clients expect).
 """
 from __future__ import annotations
@@ -13,12 +13,12 @@ from . import harness
 from .agent import LibraryGenerator, solve as _solve
 from .eval import TASKS_BY_NAME
 
-mcp = FastMCP("bytewright")
+mcp = FastMCP("siryapsalot")
 
 
 @mcp.tool()
 def build_binary(ir: dict, out_path: str | None = None) -> dict:
-    """Compile a Bytewright IR program (see schema/ir.schema.json) into a Windows .exe."""
+    """Compile a Sir Yaps-a-Lot IR program (see schema/ir.schema.json) into a Windows .exe."""
     return harness.build_binary(ir, out_path)
 
 

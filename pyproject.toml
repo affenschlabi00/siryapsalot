@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bytewright"
+name = "siryapsalot"
 version = "0.1.0"
 description = "Sir Yaps-a-Lot — an AI system that turns intent into a working Windows .exe via a verifiable machine-level IR and a deterministic, trusted backend."
 readme = "README.md"
@@ -20,15 +20,16 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0"]             # MCP server surface
-ai = ["anthropic>=0.40"]      # model-driven generator (bytewright create / chat)
+ai = ["anthropic>=0.40"]      # model-driven generator (siryapsalot create / chat)
 emu-win = ["qiling>=1.4"]     # optional Windows-fidelity emulation path
 dev = ["pytest>=7.0"]
 
 [project.scripts]
-bytewright = "bytewright.cli:main"
+siryapsalot = "siryapsalot.cli:main"
+yaps = "siryapsalot.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["bytewright*"]
+include = ["siryapsalot*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/affenschlabi00/siryapsalot/schema/ir.schema.json",
-  "title": "Bytewright IR",
+  "title": "Sir Yaps-a-Lot IR",
   "description": "Machine-level intermediate representation: real x86-64 instructions with symbolic names for jump targets, Win32 imports, named data, and virtual registers. The deterministic backend resolves names to bytes. This schema is the frozen contract between model and backend (Plan section 4).",
   "type": "object",
   "required": ["metadata", "code"],

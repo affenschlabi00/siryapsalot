@@ -4,8 +4,8 @@ import threading
 import urllib.request
 from http.server import HTTPServer
 
-from bytewright.chatbot import Chatbot
-from bytewright.web import ChatService, INDEX_HTML, make_handler
+from siryapsalot.chatbot import Chatbot
+from siryapsalot.web import ChatService, INDEX_HTML, make_handler
 from conftest import load_example
 
 

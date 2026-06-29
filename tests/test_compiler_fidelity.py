@@ -8,7 +8,7 @@ import subprocess
 
 import pytest
 
-from bytewright import harness
+from siryapsalot import harness
 
 MINGW = shutil.which("x86_64-w64-mingw32-gcc")
 pytestmark = pytest.mark.skipif(MINGW is None, reason="MinGW-w64 not installed")

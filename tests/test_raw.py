@@ -4,9 +4,9 @@ import os
 
 import pytest
 
-from bytewright import harness
-from bytewright.chatbot import Chatbot
-from bytewright.raw import build_from_obj, build_raw_pe, validate_obj
+from siryapsalot import harness
+from siryapsalot.chatbot import Chatbot
+from siryapsalot.raw import build_from_obj, build_raw_pe, validate_obj
 from conftest import load_example
 
 

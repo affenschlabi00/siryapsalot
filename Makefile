@@ -12,11 +12,11 @@ test:
 	$(PY) -m pytest -q
 
 eval:
-	$(PY) -m bytewright.cli eval
+	$(PY) -m siryapsalot.cli eval
 
 hello:
-	$(PY) -m bytewright.cli build examples/hello.ir.json -o build/hello.exe
-	$(PY) -m bytewright.cli run build/hello.exe
+	$(PY) -m siryapsalot.cli build examples/hello.ir.json -o build/hello.exe
+	$(PY) -m siryapsalot.cli run build/hello.exe
 
 demo:
 	$(PY) examples/demo.py

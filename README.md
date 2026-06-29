@@ -1,4 +1,6 @@
-# Sir Yaps-a-Lot (`bytewright`)
+# Sir Yaps-a-Lot
+
+*A chatbot that builds Windows binaries. Python package: `siryapsalot` · commands: `siryapsalot`, `yaps`.*
 
 > **A chatbot that builds Windows binaries.** Tell it what you want — *"make me a tic-tac-toe
 > game"* — and it ships a working `.exe`. No C, no Rust, no source code, and nothing technical
@@ -6,8 +8,8 @@
 
 ```bash
 pip install -e .
-bytewright            # start chatting (terminal)
-bytewright serve      # …or a browser chat UI
+siryapsalot            # start chatting (terminal)
+siryapsalot serve      # …or a browser chat UI
 ```
 
 Under the hood the model emits a verifiable machine-level representation that a trusted,
@@ -62,8 +64,8 @@ pip install -e ".[ai]" && export ANTHROPIC_API_KEY=sk-...
 **Then just chat:**
 
 ```bash
-bytewright            # terminal chat (no subcommand needed)
-bytewright serve      # browser chat UI at http://127.0.0.1:8765 with download buttons
+siryapsalot            # terminal chat (no subcommand needed)
+siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 with download buttons
 ```
 
 ```text
@@ -73,7 +75,7 @@ you> now something that tells me if a number is prime
 bot> Done — I built prime.exe.  (self-tested: 7 -> prime, 8 -> not prime)
 ```
 
-**Scope, honestly.** Bytewright builds:
+**Scope, honestly.** Sir Yaps-a-Lot builds:
 - console (text) programs — arithmetic, loops, file + console I/O;
 - **turn-based games** — e.g. *"make me a tic-tac-toe game"* produces a real playable game
   (move parsing, board rendering each turn, win/draw detection) and *"make me a guessing game"*
@@ -102,6 +104,41 @@ No API key? The exact same loop runs with any `fn(message, feedback, iter, histo
 generator (see `examples/chat_demo.py`) — that's how the chatbot demo and every
 `examples/*.ir.json` were produced and verified here.
 
+## Running on Windows
+
+**Do the binaries it makes need anything installed? No.** Every `.exe` Sir Yaps-a-Lot produces is
+a real native Windows PE — copy it to any Windows machine and double-click it; nothing to install.
+
+**Does the *tool* need anything? Yes — a one-time setup** (it's a Python program). No compiler,
+no Visual Studio, no MinGW — all dependencies are normal pip wheels with prebuilt Windows
+binaries.
+
+1. **Install Python 3.10+** from [python.org](https://www.python.org/downloads/windows/) — tick
+   *"Add python.exe to PATH"* in the installer.
+2. **Install Sir Yaps-a-Lot** (PowerShell or Command Prompt):
+   ```powershell
+   git clone https://github.com/affenschlabi00/siryapsalot
+   cd siryapsalot
+   pip install .            # pulls keystone, capstone, unicorn, lief, jsonschema (all wheels)
+   ```
+3. **Pick a model** (one of):
+   - **Local & free — Ollama:** install [Ollama for Windows](https://ollama.com/download), then
+     ```powershell
+     ollama pull qwen2.5-coder
+     setx OLLAMA_MODEL qwen2.5-coder      # reopen the terminal after setx
+     ```
+   - **Anthropic API:** `pip install anthropic` then `setx ANTHROPIC_API_KEY sk-...`
+4. **Run it:**
+   ```powershell
+   siryapsalot           # chat in the terminal  (or:  yaps)
+   siryapsalot serve     # browser chat UI at http://127.0.0.1:8765
+   ```
+5. The binaries land in `build\` — they're native Windows `.exe`s you can run directly.
+
+> The whole build → run → self-test → repair loop runs on Windows: the harness emulates the CPU
+> (Unicorn) and the Win32 calls in-process, so it works the same on Windows, macOS, and Linux —
+> and the output is always a real Windows `.exe`.
+
 ## Raw bytes → binary (the end goal)
 
 The north star: a model that just emits **raw bytes** and gets a great binary. That path is
@@ -110,11 +147,11 @@ bytes (it does the encoding itself) plus a relocation list; the trusted backend 
 writes the unforgiving PE container:
 
 ```bash
-python -m bytewright.cli rawbuild examples/raw_hi.obj.json   # raw machine code -> .exe -> "Hi"
+python -m siryapsalot.cli rawbuild examples/raw_hi.obj.json   # raw machine code -> .exe -> "Hi"
 ```
 
 ```python
-from bytewright.raw import build_from_obj, build_raw_pe
+from siryapsalot.raw import build_from_obj, build_raw_pe
 build_from_obj({                       # object level: bytes + relocations
     "metadata": {"name": "hi", "entry_offset": 0},
     "code": "4883ec28 b9f5ffffff ff15........ ...",   # literal machine code (hex)
@@ -136,18 +173,18 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"           # keystone, capstone, unicorn, lief, jsonschema, pytest
 
 # Compile an IR program to a real PE, then run it in the emulator:
-python -m bytewright.cli build examples/hello.ir.json -o build/hello.exe
-python -m bytewright.cli run   build/hello.exe          # -> "Hello, world!"
-python -m bytewright.cli validate build/hello.exe       # structural PE check (LIEF)
-python -m bytewright.cli trace build/hello.exe          # step-by-step execution movie
-python -m bytewright.cli eval                           # build+verify the whole task suite
+python -m siryapsalot.cli build examples/hello.ir.json -o build/hello.exe
+python -m siryapsalot.cli run   build/hello.exe          # -> "Hello, world!"
+python -m siryapsalot.cli validate build/hello.exe       # structural PE check (LIEF)
+python -m siryapsalot.cli trace build/hello.exe          # step-by-step execution movie
+python -m siryapsalot.cli eval                           # build+verify the whole task suite
 ```
 
 Or from Python:
 
 ```python
 import json
-from bytewright import harness
+from siryapsalot import harness
 
 ir  = json.load(open("examples/hello.ir.json"))
 rep = harness.build_binary(ir, "build/hello.exe")        # IR -> .exe
@@ -159,22 +196,22 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
 - **IR** (`schema/ir.schema.json`, examples in `examples/`): real x86-64 instructions with
   *symbolic names* — labels for jumps, `import:dll!func` for Win32 APIs, `data:label`,
   and virtual registers `%vN`. The model never computes byte offsets.
-- **Backend** (`bytewright/backend/`): validates IR, allocates virtual registers, inserts
+- **Backend** (`siryapsalot/backend/`): validates IR, allocates virtual registers, inserts
   the prologue/epilogue (shadow space + 16-byte alignment), encodes via Keystone with a
   relocation scheme, lays out sections, builds the import directory/IAT, and writes a
   hand-rolled PE32+. Deterministic and trusted — **never learned**.
-- **Harness** (`bytewright/harness/`): a Unicorn-based Windows emulator that loads the PE,
+- **Harness** (`siryapsalot/harness/`): a Unicorn-based Windows emulator that loads the PE,
   intercepts each imported API with a Python implementation (no Windows rootfs needed),
   and exposes the Plan §6 tools — `build_binary`, `validate_pe`, `disassemble`, `run`,
   `trace`, `inspect`, `crash_analysis`, `diff_behavior`, `list_imports`, `resolve_api`.
-- **Raw-bytes path** (`bytewright/raw.py`): the end goal — `build_from_obj` links model-emitted
+- **Raw-bytes path** (`siryapsalot/raw.py`): the end goal — `build_from_obj` links model-emitted
   machine-code bytes + relocations into a PE; `build_raw_pe` accepts an entire `.exe` as bytes.
   Shares the trusted linker (`backend/layout.link`) with the IR path.
-- **MCP server** (`bytewright/mcp_server.py`): exposes all the tools (incl. `build_from_obj`,
+- **MCP server** (`siryapsalot/mcp_server.py`): exposes all the tools (incl. `build_from_obj`,
   `build_raw_pe`) to an agent/model.
-- **Agent / chatbot** (`bytewright/agent/`, `bytewright/chatbot.py`): the build → validate →
+- **Agent / chatbot** (`siryapsalot/agent/`, `siryapsalot/chatbot.py`): the build → validate →
   run → self-test → repair loop; works with an IR or a raw-bytes builder.
-- **Training** (`bytewright/reward.py`, `bytewright/dataset.py`, `bytewright/training/`): the
+- **Training** (`siryapsalot/reward.py`, `siryapsalot/dataset.py`, `siryapsalot/training/`): the
   dense reward ladder (the RLVR signal, scores IR and raw bytes), the data harvester, an
   `RLEnv`, and an SFT formatter — the Phase 4/5 scaffolding.
 
@@ -184,12 +221,12 @@ Key design decisions and how the plan's open questions were resolved live in
 ## Layout
 
 ```
-schema/ir.schema.json     frozen IR contract           bytewright/harness/   emulator + §6 tools
-examples/*.ir.json        IR programs (hello, game, …)  bytewright/mcp_server.py  MCP surface (13 tools)
-examples/raw_hi.obj.json  raw machine-code object       bytewright/chatbot.py  conversational builder
-bytewright/backend/       IR -> .exe (trusted)          bytewright/agent/     generators + repair loop
-bytewright/raw.py         raw bytes -> .exe             bytewright/training/  RL env + SFT formatter
-bytewright/eval/          task suite + oracles          bytewright/reward.py  dense reward ladder
-bytewright/dataset.py     training-data harvester       tests/                75 unit/differential tests
+schema/ir.schema.json     frozen IR contract           siryapsalot/harness/   emulator + §6 tools
+examples/*.ir.json        IR programs (hello, game, …)  siryapsalot/mcp_server.py  MCP surface (13 tools)
+examples/raw_hi.obj.json  raw machine-code object       siryapsalot/chatbot.py  conversational builder
+siryapsalot/backend/       IR -> .exe (trusted)          siryapsalot/agent/     generators + repair loop
+siryapsalot/raw.py         raw bytes -> .exe             siryapsalot/training/  RL env + SFT formatter
+siryapsalot/eval/          task suite + oracles          siryapsalot/reward.py  dense reward ladder
+siryapsalot/dataset.py     training-data harvester       tests/                75 unit/differential tests
 docs/                     plan + design notes           decisions.md          decision log
 ```

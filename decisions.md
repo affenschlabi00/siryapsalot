@@ -1,4 +1,4 @@
-# Decision log — Sir Yaps-a-Lot (`bytewright`)
+# Decision log — Sir Yaps-a-Lot (`siryapsalot`)
 
 This file records the locked decisions from project kickoff and how the deferred /
 open questions (Plan §11, §4) were resolved during the Phase 0 build. Flip any of
@@ -19,8 +19,8 @@ The plan names Qiling for the Windows-API layer. In practice the `qiling` pip pa
 ships **no Windows rootfs** (no `kernel32.dll`/`ntdll.dll` stubs), and a real rootfs
 means copying licensed Windows DLLs. Since *we* control the backend and therefore the
 exact, small set of Win32 APIs our programs import, we instead built a purpose-built
-**Unicorn-based emulator** (`bytewright/harness/emulator.py`) that intercepts each
-imported API with a Python implementation (`bytewright/harness/apidb.py`).
+**Unicorn-based emulator** (`siryapsalot/harness/emulator.py`) that intercepts each
+imported API with a Python implementation (`siryapsalot/harness/apidb.py`).
 
 Why this is better here, not just easier:
 - No rootfs, no Windows-DLL licensing, fully reproducible from `pip install`.
@@ -33,10 +33,10 @@ run a sampled subset on a real loader to confirm the emulator matches. Tracked, 
 
 ### D2 — PE construction: **hand-rolled writer** is primary; **LIEF** is the independent checker
 The plan offers LIEF (build) with a hand-rolled writer as an optional purity path. We
-inverted it: `bytewright/backend/pe_builder.py` writes the PE container by hand (full
+inverted it: `siryapsalot/backend/pe_builder.py` writes the PE container by hand (full
 control over RVA/IAT layout, which our RIP-relative relocations depend on), and the
 harness uses **LIEF** to *independently parse and validate* the result
-(`bytewright/harness/validate_pe.py`). Build-by-hand + check-with-an-independent-library
+(`siryapsalot/harness/validate_pe.py`). Build-by-hand + check-with-an-independent-library
 is a stronger correctness story than build-and-check with the same tool.
 
 ### D3 — Calling convention & stack frames: **backend-owned** (resolves Plan §4/§11 open question)
@@ -77,9 +77,9 @@ v1 supports: data movement (`mov`, `lea`, `movzx`, `movsx`), arithmetic/logic
 keystone can encode that has **no symbolic operand** also passes through. Expanded later.
 
 ## D7 — Product: a chatbot, with pluggable model backends (Anthropic **or** Ollama)
-The product is a chatbot that builds binaries: `bytewright` (terminal) or `bytewright serve`
+The product is a chatbot that builds binaries: `siryapsalot` (terminal) or `siryapsalot serve`
 (browser GUI). The IR is an internal implementation detail — users never see it; they chat and
-get a `.exe`. The model backend is pluggable (`bytewright/llm.py`, `make_backend`): it uses the
+get a `.exe`. The model backend is pluggable (`siryapsalot/llm.py`, `make_backend`): it uses the
 Anthropic API if `ANTHROPIC_API_KEY` is set, otherwise a local **Ollama** model (auto-detected,
 or `OLLAMA_MODEL`) — so no API key is required. Ollama runs are constrained to JSON output
 (`format=json`) for reliability. The web UI is pure stdlib (`http.server`), no new dependency.
@@ -111,11 +111,11 @@ hand-emitting raw bytes that build and run (`examples/raw_hi.obj.json`). Per the
 "may never beat the IR path," but the infrastructure and the repair loop for it now exist.
 
 ## Phase 4/5 starters (built ahead, compute-free)
-- **Reward ladder** (`bytewright/reward.py`) — the Plan §5 RLVR reward, computed by the harness:
+- **Reward ladder** (`siryapsalot/reward.py`) — the Plan §5 RLVR reward, computed by the harness:
   IR validates → builds → loadable → runs → k/n tests → all tests → efficiency bonus, with
   partial credit (fraction of cases that ran, output similarity) so there is always a gradient.
   Reusable today as a richer eval metric.
-- **Data harvester** (`bytewright/dataset.py`) — emits verified (intent → IR) supervised pairs
+- **Data harvester** (`siryapsalot/dataset.py`) — emits verified (intent → IR) supervised pairs
   and (intent → buggy IR → feedback → fixed IR) repair trajectories as JSONL. The full factory
   (compiling a real source corpus at multiple optimization levels for scale) builds on this
   same schema and is what remains gated on compute.
@@ -125,4 +125,4 @@ hand-emitting raw bytes that build and run (`examples/raw_hi.obj.json`). Per the
 - **ISA** — x86-64 only (forced by Windows desktop target). ARM64 only if a 2nd target lands.
 - **Register spilling** — implement when a program needs >7 simultaneous virtual registers.
 - **Fidelity testing cadence** — how often to cross-check the emulator against real Windows/Wine.
-- **Project name** — `bytewright` (codename); repo is `siryapsalot`.
+- **Project name** — `siryapsalot` (codename); repo is `siryapsalot`.

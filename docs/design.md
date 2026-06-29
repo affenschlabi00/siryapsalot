@@ -7,10 +7,10 @@ How the implementation realizes the plan, and the engineering choices behind it.
 
 ```
 examples/foo.ir.json
-   │  bytewright.backend.build_binary(ir, out)
+   │  siryapsalot.backend.build_binary(ir, out)
    ▼
 validate_ir → regalloc → encode(+relocs) → layout(link) → imports(IAT) → pe_builder → foo.exe
-   │  bytewright.harness.run/trace/inspect/crash_analysis(...)
+   │  siryapsalot.harness.run/trace/inspect/crash_analysis(...)
    ▼
 Unicorn emulator: map PE, redirect IAT to Python API hooks, execute with full observability
 ```

@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from bytewright import harness
+from siryapsalot import harness
 from conftest import load_example
 
 

@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from bytewright import harness
+from siryapsalot import harness
 from conftest import load_example
 
 
@@ -40,7 +40,7 @@ def test_fizzbuzz_multiprocedure(build_dir):
     assert rep["ok"], rep["errors"]
     r = harness.run(out)
     assert not r["crashed"] and r["exit_code"] == 0
-    from bytewright.eval.oracles import fizzbuzz
+    from siryapsalot.eval.oracles import fizzbuzz
     assert r["stdout"] == fizzbuzz("")
 
 

@@ -1,4 +1,4 @@
-"""bytewright command-line interface — drive the backend and harness from a shell."""
+"""siryapsalot command-line interface — drive the backend and harness from a shell."""
 from __future__ import annotations
 
 import argparse
@@ -19,8 +19,8 @@ def _print(obj):
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        prog="bytewright",
-        description="A chatbot that builds Windows binaries. Just run `bytewright` and chat.")
+        prog="siryapsalot",
+        description="A chatbot that builds Windows binaries. Just run `siryapsalot` and chat.")
     sub = p.add_subparsers(dest="cmd")   # no subcommand -> chat
 
     b = sub.add_parser("build", help="compile IR JSON to a .exe")
@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     rw.add_argument("task")
 
     ds = sub.add_parser("dataset", help="harvest a training dataset (Phase 4)")
-    ds.add_argument("-o", "--out", default="datasets/bytewright.jsonl")
+    ds.add_argument("-o", "--out", default="datasets/siryapsalot.jsonl")
 
     rb = sub.add_parser("rawbuild", help="build from raw machine-code bytes + relocations (an object)")
     rb.add_argument("obj"); rb.add_argument("-o", "--out"); rb.add_argument("--stdin", default="")
