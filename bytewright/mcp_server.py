@@ -23,6 +23,25 @@ def build_binary(ir: dict, out_path: str | None = None) -> dict:
 
 
 @mcp.tool()
+def build_from_obj(obj: dict) -> dict:
+    """Build a PE from raw machine-code bytes + relocations (the raw-bytes path).
+
+    obj = {metadata:{name, subsystem, entry_offset}, code:"<hex>", imports:[...], data:[...],
+    relocs:[{offset, kind:'code'|'data'|'import', target}]}. The model emits the bytes; the
+    backend only links + writes the PE container.
+    """
+    from .raw import build_from_obj as _b
+    return _b(obj)
+
+
+@mcp.tool()
+def build_raw_pe(pe_hex: str) -> dict:
+    """Accept an ENTIRE .exe as hex bytes; write it and report whether the loader would accept it."""
+    from .raw import build_raw_pe as _b
+    return _b(pe_hex)
+
+
+@mcp.tool()
 def validate_pe(path: str) -> dict:
     """Statically validate a PE: will the Windows loader accept it? (structure, entry, imports)."""
     return harness.validate_pe(path)

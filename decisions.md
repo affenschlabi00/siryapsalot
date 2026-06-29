@@ -76,6 +76,23 @@ v1 supports: data movement (`mov`, `lea`, `movzx`, `movsx`), arithmetic/logic
 `call`, conditional `setcc`), and `nop`. `cdq/cqo` for division sign-extension. Anything
 keystone can encode that has **no symbolic operand** also passes through. Expanded later.
 
+## Raw-bytes path (Plan §6 stretch — now implemented)
+The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
+both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:
+
+- **Object level** (`raw.build_from_obj`) — the sweet spot. The model emits the literal `.text`
+  machine-code bytes (it does the instruction *encoding* — the real machine-level work) plus a
+  relocation list and the data/imports; the backend only links (RVA layout, IAT, PE container).
+  This is an object file: bytes from the model, clerical layout from the trusted floor.
+- **Full-PE level** (`raw.build_raw_pe`) — the purest flex. The model emits the entire `.exe` as
+  bytes; the harness just writes and validates/runs it.
+
+`validate_obj` gives structured errors (bad reloc offset, undeclared import, bad hex), and
+`disassemble`/`run`/`crash_analysis` all work on raw-built binaries, so the same chatbot loop
+drives byte-level self-repair (`Chatbot(..., builder=raw.build_from_obj)`). Demonstrated by
+hand-emitting raw bytes that build and run (`examples/raw_hi.obj.json`). Per the plan this path
+"may never beat the IR path," but the infrastructure and the repair loop for it now exist.
+
 ## Phase 4/5 starters (built ahead, compute-free)
 - **Reward ladder** (`bytewright/reward.py`) — the Plan §5 RLVR reward, computed by the harness:
   IR validates → builds → loadable → runs → k/n tests → all tests → efficiency bonus, with

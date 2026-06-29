@@ -45,12 +45,16 @@ def _check(test: dict, run: dict) -> tuple[bool, str]:
 class Chatbot:
     """Conversational binary builder. Call .send(message) and get a reply + a built .exe."""
 
-    def __init__(self, generator, max_iters: int = 6, out_dir: str = "build"):
+    def __init__(self, generator, max_iters: int = 6, out_dir: str = "build", builder=None):
         # generator: callable(message, feedback, iteration, history) -> spec dict
         #            spec = {program_name, explanation, ir, self_tests:[{stdin, expect_*}]}
+        # builder:   callable(program, out_path) -> build report. Default builds IR; pass
+        #            bytewright.raw.build_from_obj to build from raw machine-code bytes instead
+        #            (same self-test + repair loop, the model just emits bytes).
         self.generator = generator
         self.max_iters = max_iters
         self.out_dir = out_dir
+        self.builder = builder or harness.build_binary
         self.history: list[dict] = []
 
     def send(self, message: str, verbose: bool = False) -> dict:
@@ -64,7 +68,7 @@ class Chatbot:
             tests = spec.get("self_tests") or [{"stdin": ""}]
             out = os.path.join(self.out_dir, f"{name}.exe")
 
-            rep = harness.build_binary(ir, out)
+            rep = self.builder(ir, out)
             if not rep["ok"]:
                 feedback = fb.from_build(rep)
                 if verbose:

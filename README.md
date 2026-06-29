@@ -27,7 +27,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 3 | Agentic scaffolding (intent → build → run → repair) | ✅ `create`/`chat` + repair loop + 8-task eval suite |
 | 4 | Training-data factory | 🟡 starter: harvester emits verified (intent→IR) + repair-trajectory samples |
 | 5 | Train: distill, then RLVR | 🟡 starter: the dense reward ladder (the RLVR reward) is built (`bytewright/reward.py`) |
-| 6 | Harden & expand | 🟡 in progress: GUI message boxes (user32), positioned/colored console (cursor + fill); angr verification & raw-hex stretch still planned |
+| 6 | Harden & expand | 🟡 in progress: GUI (user32 MessageBox), positioned/colored console, a real playable game (Tic-Tac-Toe), and the **raw-bytes path** (model emits literal machine code → binary); angr verification still planned |
 
 > Phases 4–5 are *started* (the data harvester and reward function are real and tested), but
 > the full data factory (compiling a source corpus at multiple optimization levels) and the
@@ -85,6 +85,33 @@ bot> Real-time graphical Tetris is beyond the backend right now, so I built an A
 No API key? The exact same loop runs with any `fn(message, feedback, iter, history) -> spec`
 generator (see `examples/chat_demo.py`) — that's how the chatbot demo and every
 `examples/*.ir.json` were produced and verified here.
+
+## Raw bytes → binary (the end goal)
+
+The north star: a model that just emits **raw bytes** and gets a great binary. That path is
+built. The sweet spot is an *object file* — the model emits the literal `.text` machine-code
+bytes (it does the encoding itself) plus a relocation list; the trusted backend only links and
+writes the unforgiving PE container:
+
+```bash
+python -m bytewright.cli rawbuild examples/raw_hi.obj.json   # raw machine code -> .exe -> "Hi"
+```
+
+```python
+from bytewright.raw import build_from_obj, build_raw_pe
+build_from_obj({                       # object level: bytes + relocations
+    "metadata": {"name": "hi", "entry_offset": 0},
+    "code": "4883ec28 b9f5ffffff ff15........ ...",   # literal machine code (hex)
+    "imports": [{"dll": "kernel32.dll", "function": "WriteFile"}, ...],
+    "data": [{"label": "msg", "type": "bytes", "value": "Hi\n"}],
+    "relocs": [{"offset": 11, "kind": "import", "target": "kernel32.dll!GetStdHandle"}, ...],
+})
+build_raw_pe(open("some.exe","rb").read().hex())   # full level: the entire .exe as bytes
+```
+
+`disassemble`, `run`, and `crash_analysis` all work on raw-built binaries, so the same chatbot
+loop drives **byte-level self-repair** — `Chatbot(generator, builder=build_from_obj)`. (Per the
+plan this may never beat the IR path; it's the research flex — and it works.)
 
 ## Quick start (compile + inspect)
 

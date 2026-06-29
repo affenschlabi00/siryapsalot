@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "name": "raw_hi",
+    "subsystem": "console",
+    "entry_offset": 0,
+    "description": "Hand-written raw machine code (+relocations) that prints 'Hi'."
+  },
+  "code": "4883ec28b9f5ffffffff15000000004889c1488d150000000041b8030000004c8d0d0000000048c744242000000000ff150000000031c9ff1500000000",
+  "imports": [
+    {
+      "dll": "kernel32.dll",
+      "function": "GetStdHandle"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "WriteFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    }
+  ],
+  "data": [
+    {
+      "label": "msg",
+      "type": "bytes",
+      "value": "Hi\n"
+    },
+    {
+      "label": "written",
+      "type": "u32",
+      "value": 0
+    }
+  ],
+  "relocs": [
+    {
+      "offset": 11,
+      "kind": "import",
+      "target": "kernel32.dll!GetStdHandle"
+    },
+    {
+      "offset": 21,
+      "kind": "data",
+      "target": "msg"
+    },
+    {
+      "offset": 34,
+      "kind": "data",
+      "target": "written"
+    },
+    {
+      "offset": 49,
+      "kind": "import",
+      "target": "kernel32.dll!WriteFile"
+    },
+    {
+      "offset": 57,
+      "kind": "import",
+      "target": "kernel32.dll!ExitProcess"
+    }
+  ]
+}

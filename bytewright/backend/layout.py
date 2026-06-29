@@ -125,24 +125,29 @@ def _assemble_text(ir: dict):
     return text, symbols, relocs
 
 
-def layout(ir: dict) -> LayoutResult:
-    # ---- .text ----
-    text, text_syms, relocs = _assemble_text(ir)
+def link(text, relocs, data_items, imports_list, entry_offset,
+         code_symbols: dict[str, int] | None = None) -> LayoutResult:
+    """Lay out and link prebuilt .text bytes + relocations into a PE image.
+
+    Shared by the IR path (which assembles text + relocs from mnemonics) and the raw path
+    (where the model supplies literal machine-code bytes + a relocation list). A code reloc's
+    target is a label in `code_symbols`, or an integer byte-offset into the text (raw path).
+    """
+    text = bytearray(text)
     code_size = len(text)
+    code_symbols = code_symbols or {}
 
     # ---- data items: split read-only vs writable ----
     ro_chunks: list[tuple[str, bytes]] = []
     w_chunks: list[tuple[str, bytes]] = []
-    for d in ir.get("data", []):
+    for d in data_items:
         blob, writable = _encode_data_item(d)
         (w_chunks if writable else ro_chunks).append((d["label"], blob))
 
     # ---- assign section RVAs ----
     rdata_rva = _align(TEXT_RVA + code_size, SECTION_ALIGN)
-    imp = imports.build_imports(ir.get("imports", []), rdata_rva)
+    imp = imports.build_imports(imports_list, rdata_rva)
 
-    # read-only data follows the import blob inside .rdata
-    ro_base = len(imp.blob)
     ro_off: dict[str, int] = {}
     rdata = bytearray(imp.blob)
     for label, blob in ro_chunks:
@@ -156,10 +161,6 @@ def layout(ir: dict) -> LayoutResult:
         w_off[label] = len(data)
         data += blob
 
-    # ---- symbol -> VA resolution ----
-    def code_va(name: str) -> int:
-        return IMAGE_BASE + TEXT_RVA + text_syms[name]
-
     sym_va: dict[str, int] = {}
     for label, off in ro_off.items():
         sym_va[label] = IMAGE_BASE + rdata_rva + off
@@ -169,7 +170,14 @@ def layout(ir: dict) -> LayoutResult:
     # ---- patch relocations ----
     for r in relocs:
         if r.kind == "code":
-            target_va = code_va(r.target)
+            if r.target in code_symbols:
+                off = code_symbols[r.target]
+            else:
+                try:
+                    off = int(r.target)
+                except (TypeError, ValueError):
+                    raise LayoutError(f"unresolved code target '{r.target}'")
+            target_va = IMAGE_BASE + TEXT_RVA + off
         elif r.kind == "data":
             if r.target not in sym_va:
                 raise LayoutError(f"unresolved data label '{r.target}'")
@@ -180,25 +188,24 @@ def layout(ir: dict) -> LayoutResult:
             target_va = IMAGE_BASE + imp.slot_rva[r.target]
         else:
             raise LayoutError(f"unknown reloc kind {r.kind}")
+        if not (0 <= r.text_off <= len(text) - 4):
+            raise LayoutError(f"relocation offset {r.text_off} outside the code")
         field_va = IMAGE_BASE + TEXT_RVA + r.text_off
         disp = target_va - (field_va + 4)
         if not (-0x80000000 <= disp <= 0x7FFFFFFF):
             raise LayoutError(f"relocation out of 32-bit range for {r.target}")
         struct.pack_into("<i", text, r.text_off, disp)
 
-    entry_label = ir["metadata"]["entry"]
-    if entry_label not in text_syms:
-        raise LayoutError(f"entry '{entry_label}' not found in code")
-    entry_rva = TEXT_RVA + text_syms[entry_label]
+    entry_rva = TEXT_RVA + entry_offset
 
-    # ---- sections ----
     sections = [Section(".text", TEXT_RVA, 0x60000020, bytes(text))]   # CODE|EXEC|READ
     if rdata:
         sections.append(Section(".rdata", rdata_rva, 0x40000040, bytes(rdata)))  # IDATA|READ
     if data:
         sections.append(Section(".data", data_rva, 0xC0000040, bytes(data)))     # IDATA|R|W
 
-    symbols_report = {**{k: code_va(k) for k in text_syms}, **sym_va}
+    symbols_report = {k: IMAGE_BASE + TEXT_RVA + off for k, off in code_symbols.items()}
+    symbols_report.update(sym_va)
     for k, v in imp.slot_rva.items():
         symbols_report[f"iat:{k}"] = IMAGE_BASE + v
 
@@ -212,3 +219,13 @@ def layout(ir: dict) -> LayoutResult:
         symbols=symbols_report,
         code_size=code_size,
     )
+
+
+def layout(ir: dict) -> LayoutResult:
+    """IR path: assemble mnemonics to text + relocs, then link."""
+    text, text_syms, relocs = _assemble_text(ir)
+    entry_label = ir["metadata"]["entry"]
+    if entry_label not in text_syms:
+        raise LayoutError(f"entry '{entry_label}' not found in code")
+    return link(text, relocs, ir.get("data", []), ir.get("imports", []),
+                entry_offset=text_syms[entry_label], code_symbols=text_syms)

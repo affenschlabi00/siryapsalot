@@ -60,6 +60,9 @@ def main(argv: list[str] | None = None) -> int:
     ds = sub.add_parser("dataset", help="harvest a training dataset (Phase 4)")
     ds.add_argument("-o", "--out", default="datasets/bytewright.jsonl")
 
+    rb = sub.add_parser("rawbuild", help="build from raw machine-code bytes + relocations (an object)")
+    rb.add_argument("obj"); rb.add_argument("-o", "--out"); rb.add_argument("--stdin", default="")
+
     args = p.parse_args(argv)
 
     if args.cmd == "build":
@@ -117,6 +120,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "dataset":
         from .dataset import build_dataset
         _print(build_dataset(args.out)); return 0
+    if args.cmd == "rawbuild":
+        from .raw import build_from_obj
+        rep = build_from_obj(_load_ir(args.obj), args.out)
+        _print(rep)
+        if rep["ok"]:
+            print("stdout:", repr(harness.run(rep["path"], stdin=args.stdin)["stdout"]))
+        return 0 if rep["ok"] else 1
     return 1
 
 
