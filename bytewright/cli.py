@@ -42,6 +42,12 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("crash", help="analyze a crash")
     c.add_argument("exe"); c.add_argument("--stdin", default="")
 
+    e = sub.add_parser("eval", help="run the eval task suite (reference solutions)")
+    e.add_argument("--task", help="run only this task")
+
+    s = sub.add_parser("solve", help="run the agent repair loop on a task")
+    s.add_argument("task"); s.add_argument("--max-iters", type=int, default=5)
+
     args = p.parse_args(argv)
 
     if args.cmd == "build":
@@ -60,6 +66,24 @@ def main(argv: list[str] | None = None) -> int:
         _print(harness.list_imports(args.exe)); return 0
     if args.cmd == "crash":
         _print(harness.crash_analysis(args.exe, stdin=args.stdin)); return 0
+    if args.cmd == "eval":
+        from .eval import TASKS, run_suite, library_get_ir
+        tasks = [t for t in TASKS if t["name"] == args.task] if args.task else TASKS
+        summary = run_suite(library_get_ir, tasks)
+        for r in summary["results"]:
+            tag = "PASS" if r["passed"] else f"FAIL@{r['stage']}"
+            print(f"  {r['task']:12} {tag}  {r.get('pass_count','')}/{r.get('total','')}")
+        print(f"SUITE: {summary['passed']}/{summary['total']} tasks pass")
+        return 0 if summary["passed"] == summary["total"] else 1
+    if args.cmd == "solve":
+        from .agent import solve, LibraryGenerator
+        from .eval import TASKS_BY_NAME
+        task = TASKS_BY_NAME.get(args.task)
+        if not task:
+            print(f"unknown task '{args.task}'; known: {list(TASKS_BY_NAME)}"); return 1
+        res = solve(task, LibraryGenerator(), max_iters=args.max_iters, verbose=True)
+        print(f"success={res['success']} iterations={res['iterations']}")
+        return 0 if res["success"] else 1
     return 1
 
 

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Build the worked examples (smoke)
+        run: |
+          for ex in examples/*.ir.json; do
+            python -m bytewright.cli build "$ex" -o "build/$(basename "${ex%.ir.json}").exe"
+          done
+      - name: Run the eval task suite
+        run: python -m bytewright.cli eval
+      - name: Unit + differential tests
+        run: python -m pytest -q
