@@ -56,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("chat", help="interactive: type requests, get binaries")
 
+    rw = sub.add_parser("reward", help="score a task's reference IR on the dense reward ladder")
+    rw.add_argument("task")
+
+    ds = sub.add_parser("dataset", help="harvest a training dataset (Phase 4)")
+    ds.add_argument("-o", "--out", default="datasets/bytewright.jsonl")
+
     args = p.parse_args(argv)
 
     if args.cmd == "build":
@@ -106,6 +112,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if res["success"] else 1
     if args.cmd == "chat":
         return _chat()
+    if args.cmd == "reward":
+        from .reward import reward
+        from .eval import TASKS_BY_NAME, library_get_ir
+        task = TASKS_BY_NAME.get(args.task)
+        if not task:
+            print(f"unknown task '{args.task}'; known: {list(TASKS_BY_NAME)}"); return 1
+        _print(reward(library_get_ir(task), task)); return 0
+    if args.cmd == "dataset":
+        from .dataset import build_dataset
+        _print(build_dataset(args.out)); return 0
     return 1
 
 

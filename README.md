@@ -25,7 +25,13 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 1 | Harness / MCP server (the judge) | ✅ core done (Unicorn emulator + all §6 tools + MCP) |
 | 2 | Deterministic backend (IR → .exe) | ✅ done (loops, branches, arithmetic, div/mul, stdin, file I/O, multi-procedure call/ret) |
 | 3 | Agentic scaffolding (intent → build → run → repair) | ✅ `create`/`chat` + repair loop + 8-task eval suite |
-| 4–6 | Training-data factory · train · harden | planned (see plan + `decisions.md`) |
+| 4 | Training-data factory | 🟡 starter: harvester emits verified (intent→IR) + repair-trajectory samples |
+| 5 | Train: distill, then RLVR | 🟡 starter: the dense reward ladder (the RLVR reward) is built (`bytewright/reward.py`) |
+| 6 | Harden & expand | planned (more Win32 surface, GUI, angr, raw-hex stretch) |
+
+> Phases 4–5 are *started* (the data harvester and reward function are real and tested), but
+> the full data factory (compiling a source corpus at multiple optimization levels) and the
+> training runs themselves are gated on a compute decision — see `decisions.md` §11.
 
 ## Describe it, get a binary
 

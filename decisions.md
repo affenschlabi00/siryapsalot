@@ -76,8 +76,18 @@ v1 supports: data movement (`mov`, `lea`, `movzx`, `movsx`), arithmetic/logic
 `call`, conditional `setcc`), and `nop`. `cdq/cqo` for division sign-extension. Anything
 keystone can encode that has **no symbolic operand** also passes through. Expanded later.
 
+## Phase 4/5 starters (built ahead, compute-free)
+- **Reward ladder** (`bytewright/reward.py`) — the Plan §5 RLVR reward, computed by the harness:
+  IR validates → builds → loadable → runs → k/n tests → all tests → efficiency bonus, with
+  partial credit (fraction of cases that ran, output similarity) so there is always a gradient.
+  Reusable today as a richer eval metric.
+- **Data harvester** (`bytewright/dataset.py`) — emits verified (intent → IR) supervised pairs
+  and (intent → buggy IR → feedback → fixed IR) repair trajectories as JSONL. The full factory
+  (compiling a real source corpus at multiple optimization levels for scale) builds on this
+  same schema and is what remains gated on compute.
+
 ## Still deferred (revisit before the relevant phase) — Plan §11
-- **Training compute** — gates Phases 4–6 scope. Needs a real number before Phase 4.
+- **Training compute** — gates the *training runs* and the full data factory. Needs a real number.
 - **ISA** — x86-64 only (forced by Windows desktop target). ARM64 only if a 2nd target lands.
 - **Register spilling** — implement when a program needs >7 simultaneous virtual registers.
 - **Fidelity testing cadence** — how often to cross-check the emulator against real Windows/Wine.
