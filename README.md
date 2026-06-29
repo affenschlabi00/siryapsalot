@@ -23,22 +23,50 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 |---|---|---|
 | 0 | Scope, repo, frozen IR schema | ✅ done |
 | 1 | Harness / MCP server (the judge) | ✅ core done (Unicorn emulator + all §6 tools + MCP) |
-| 2 | Deterministic backend (IR → .exe) | ✅ done (`hello` + arithmetic/loops/branches/stdin/file I/O) |
-| 3 | Agentic scaffolding (build→run→repair loop) | ✅ scaffolding + eval task suite |
+| 2 | Deterministic backend (IR → .exe) | ✅ done (loops, branches, arithmetic, div/mul, stdin, file I/O, multi-procedure call/ret) |
+| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ `create`/`chat` + repair loop + 8-task eval suite |
 | 4–6 | Training-data factory · train · harden | planned (see plan + `decisions.md`) |
 
-## Quick start
+## Describe it, get a binary
+
+The headline: say what you want, and the AI builds the `.exe`. A model emits IR, the harness
+builds/validates/runs it, and on failure feeds the crash or behavioral diff back for repair —
+autonomously, until it works.
+
+```bash
+pip install -e ".[ai]"                # adds the anthropic SDK
+export ANTHROPIC_API_KEY=sk-...        # (optional) export BYTEWRIGHT_MODEL=claude-...
+
+python -m bytewright.cli create "print the fibonacci numbers below 100, one per line"
+python -m bytewright.cli create "read a number n from stdin and print n squared" --stdin "9"
+python -m bytewright.cli chat          # interactive: type requests, get binaries
+```
+
+Programmatically — the loop is generator-agnostic, so a live model *or* Claude-in-the-loop
+can be the generator:
+
+```python
+from bytewright.agent import build_from_intent, AnthropicGenerator
+res = build_from_intent("sum the integers from 1 to 100 and print the total", AnthropicGenerator())
+print(res["path"], res["outputs"])     # build/sum_*.exe  ['5050\n']
+```
+
+(No API key in this environment? The exact same loop runs with any
+`fn(intent, feedback, iteration) -> ir` via `CallableGenerator` — that's how the examples
+under `examples/*.ir.json` were produced and verified.)
+
+## Quick start (compile + inspect)
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -e .                 # installs keystone, capstone, unicorn, lief, jsonschema
-pip install -e ".[mcp,dev]"      # + MCP server and pytest
+pip install -e ".[dev]"           # keystone, capstone, unicorn, lief, jsonschema, pytest
 
 # Compile an IR program to a real PE, then run it in the emulator:
 python -m bytewright.cli build examples/hello.ir.json -o build/hello.exe
 python -m bytewright.cli run   build/hello.exe          # -> "Hello, world!"
 python -m bytewright.cli validate build/hello.exe       # structural PE check (LIEF)
 python -m bytewright.cli trace build/hello.exe          # step-by-step execution movie
+python -m bytewright.cli eval                           # build+verify the whole task suite
 ```
 
 Or from Python:

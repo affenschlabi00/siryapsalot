@@ -54,6 +54,27 @@ TASKS = [
         "oracle": "fizzbuzz",
         "solution": _ex("fizzbuzz.ir.json"),
     },
+    {
+        "name": "sum1to100",
+        "intent": "Sum the integers from 1 to 100 and print the total.",
+        "cases": [{"stdin": ""}],
+        "oracle": "sum1to100",
+        "solution": _ex("sum1to100.ir.json"),
+    },
+    {
+        "name": "fibonacci",
+        "intent": "Print the Fibonacci numbers below 100, one per line.",
+        "cases": [{"stdin": ""}],
+        "oracle": "fibonacci",
+        "solution": _ex("fibonacci.ir.json"),
+    },
+    {
+        "name": "strlen",
+        "intent": "Read a line from stdin and print how many characters it has.",
+        "cases": [{"stdin": "hello world"}, {"stdin": "a"}, {"stdin": "hi\n"}],
+        "oracle": "strlen",
+        "solution": _ex("strlen.ir.json"),
+    },
 ]
 
 TASKS_BY_NAME = {t["name"]: t for t in TASKS}

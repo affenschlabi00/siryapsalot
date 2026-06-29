@@ -48,6 +48,14 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("solve", help="run the agent repair loop on a task")
     s.add_argument("task"); s.add_argument("--max-iters", type=int, default=5)
 
+    cr = sub.add_parser("create", help="describe a program in plain English; the AI builds the .exe")
+    cr.add_argument("intent", help='e.g. "print the first 10 fibonacci numbers"')
+    cr.add_argument("-o", "--out"); cr.add_argument("--stdin", action="append", default=[],
+                                                    help="a test-case stdin (repeatable)")
+    cr.add_argument("--max-iters", type=int, default=6)
+
+    sub.add_parser("chat", help="interactive: type requests, get binaries")
+
     args = p.parse_args(argv)
 
     if args.cmd == "build":
@@ -84,7 +92,43 @@ def main(argv: list[str] | None = None) -> int:
         res = solve(task, LibraryGenerator(), max_iters=args.max_iters, verbose=True)
         print(f"success={res['success']} iterations={res['iterations']}")
         return 0 if res["success"] else 1
+    if args.cmd == "create":
+        from .agent import AnthropicGenerator, build_from_intent
+        cases = [{"stdin": s} for s in args.stdin] or None
+        res = build_from_intent(args.intent, AnthropicGenerator(), cases=cases,
+                                out_path=args.out, max_iters=args.max_iters, verbose=True)
+        if res["success"]:
+            print(f"\nbuilt {res['path']}  (in {res['iterations']} iteration(s))")
+            for o in res["outputs"]:
+                print(f"  output: {o!r}")
+        else:
+            print(f"\ncould not build a working binary in {res['iterations']} iterations.")
+        return 0 if res["success"] else 1
+    if args.cmd == "chat":
+        return _chat()
     return 1
+
+
+def _chat() -> int:
+    from .agent import AnthropicGenerator, build_from_intent
+    try:
+        gen = AnthropicGenerator()
+    except RuntimeError as e:
+        print(f"chat needs a model generator: {e}")
+        return 1
+    print("bytewright chat — describe a program; I'll build a .exe. Ctrl-D to quit.")
+    while True:
+        try:
+            intent = input("\nbuild> ").strip()
+        except EOFError:
+            print(); return 0
+        if not intent:
+            continue
+        res = build_from_intent(intent, gen, verbose=True)
+        if res["success"]:
+            print(f"-> {res['path']}  outputs: {[o for o in res['outputs']]}")
+        else:
+            print("-> could not produce a working binary; try rephrasing or adding detail.")
 
 
 if __name__ == "__main__":

@@ -9,7 +9,8 @@ import json
 import os
 
 from bytewright import harness
-from bytewright.agent import ScriptedGenerator, break_factorial_digit, make_buggy, solve
+from bytewright.agent import (CallableGenerator, ScriptedGenerator, break_factorial_digit,
+                              build_from_intent, make_buggy, solve)
 from bytewright.eval import TASKS_BY_NAME, library_get_ir, run_suite
 
 HERE = os.path.dirname(__file__)
@@ -43,14 +44,26 @@ def main():
                   f"{s['api_call']['name']}(args[0]={s['api_call']['args'][0]}) = {s['api_call']['ret']:#x}")
     print(f"   ended: {t['summary']['ended']}")
 
-    rule("5. Agent self-repair loop: a buggy factorial is diagnosed and fixed")
+    rule("5. THE HEADLINE: describe a program in plain English -> get a working .exe")
+    # In production this generator is a live model (bytewright create / chat, with
+    # ANTHROPIC_API_KEY). Here a CallableGenerator stands in, mapping the request to IR.
+    gen = CallableGenerator(lambda intent, fb, it:
+                            json.load(open(os.path.join(HERE, "fibonacci.ir.json"))))
+    print("   USER: \"print the fibonacci numbers below 100, one per line\"")
+    res = build_from_intent("print the fibonacci numbers below 100, one per line",
+                            gen, verbose=False)
+    print(f"   -> built {res['path']} (success={res['success']})")
+    print("   -> program output:")
+    print("      " + res["outputs"][0].replace("\n", " ").strip())
+
+    rule("6. Agent self-repair loop: a buggy factorial is diagnosed and fixed")
     task = TASKS_BY_NAME["factorial"]
     buggy = make_buggy(task["solution"], break_factorial_digit)
     fixed = json.load(open(task["solution"]))
     res = solve(task, ScriptedGenerator([buggy, fixed]), max_iters=4, verbose=True)
     print(f"   -> success={res['success']} after {res['iterations']} iteration(s)")
 
-    rule("6. Eval suite (intent -> correct .exe, verified against oracles)")
+    rule("7. Eval suite (intent -> correct .exe, verified against oracles)")
     summary = run_suite(library_get_ir)
     for x in summary["results"]:
         print(f"   {x['task']:12} {'PASS' if x['passed'] else 'FAIL'} "

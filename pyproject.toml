@@ -20,7 +20,8 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0"]             # MCP server surface
-emu-win = ["qiling>=1.4"]      # optional Windows-fidelity emulation path
+ai = ["anthropic>=0.40"]      # model-driven generator (bytewright create / chat)
+emu-win = ["qiling>=1.4"]     # optional Windows-fidelity emulation path
 dev = ["pytest>=7.0"]
 
 [project.scripts]
