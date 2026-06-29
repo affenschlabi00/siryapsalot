@@ -1,0 +1,45 @@
+{
+  "metadata": {
+    "name": "filewrite",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Creates out.txt and writes a line to it. Exercises CreateFileA / WriteFile (file handle) / CloseHandle and stack arguments beyond the 4th."
+  },
+  "imports": [
+    { "dll": "kernel32.dll", "function": "CreateFileA" },
+    { "dll": "kernel32.dll", "function": "WriteFile" },
+    { "dll": "kernel32.dll", "function": "CloseHandle" },
+    { "dll": "kernel32.dll", "function": "ExitProcess" }
+  ],
+  "data": [
+    { "label": "fname", "type": "bytes", "value": [111, 117, 116, 46, 116, 120, 116, 0], "comment": "null-terminated \"out.txt\"" },
+    { "label": "content", "type": "bytes", "value": "Hello, file!\n" },
+    { "label": "written", "type": "u32", "value": 0 }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        { "op": "lea",  "args": ["rcx", "data:fname"], "comment": "lpFileName" },
+        { "op": "mov",  "args": ["edx", "0x40000000"], "comment": "GENERIC_WRITE" },
+        { "op": "xor",  "args": ["r8", "r8"], "comment": "dwShareMode = 0" },
+        { "op": "xor",  "args": ["r9", "r9"], "comment": "lpSecurityAttributes = NULL" },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "2"], "comment": "CREATE_ALWAYS" },
+        { "op": "mov",  "args": ["qword ptr [rsp+40]", "0x80"], "comment": "FILE_ATTRIBUTE_NORMAL" },
+        { "op": "mov",  "args": ["qword ptr [rsp+48]", "0"], "comment": "hTemplateFile = NULL" },
+        { "op": "call", "args": ["import:kernel32.dll!CreateFileA"] },
+        { "op": "mov",  "args": ["%v0", "rax"], "comment": "file handle" },
+        { "op": "mov",  "args": ["rcx", "%v0"] },
+        { "op": "lea",  "args": ["rdx", "data:content"] },
+        { "op": "mov",  "args": ["r8d", "13"] },
+        { "op": "lea",  "args": ["r9", "data:written"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!WriteFile"] },
+        { "op": "mov",  "args": ["rcx", "%v0"] },
+        { "op": "call", "args": ["import:kernel32.dll!CloseHandle"] },
+        { "op": "mov",  "args": ["ecx", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!ExitProcess"] }
+      ]
+    }
+  ]
+}

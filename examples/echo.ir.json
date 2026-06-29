@@ -1,0 +1,46 @@
+{
+  "metadata": {
+    "name": "echo",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Reads up to 256 bytes from stdin and writes them back to stdout. Exercises ReadFile + WriteFile."
+  },
+  "imports": [
+    { "dll": "kernel32.dll", "function": "GetStdHandle" },
+    { "dll": "kernel32.dll", "function": "ReadFile" },
+    { "dll": "kernel32.dll", "function": "WriteFile" },
+    { "dll": "kernel32.dll", "function": "ExitProcess" }
+  ],
+  "data": [
+    { "label": "buf", "type": "zeros", "size": 256 },
+    { "label": "nread", "type": "u32", "value": 0 },
+    { "label": "nwritten", "type": "u32", "value": 0 }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        { "op": "mov",  "args": ["ecx", "-10"], "comment": "STD_INPUT_HANDLE" },
+        { "op": "call", "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",  "args": ["%v0", "rax"], "comment": "hStdin" },
+        { "op": "mov",  "args": ["ecx", "-11"], "comment": "STD_OUTPUT_HANDLE" },
+        { "op": "call", "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",  "args": ["%v1", "rax"], "comment": "hStdout" },
+        { "op": "mov",  "args": ["rcx", "%v0"] },
+        { "op": "lea",  "args": ["rdx", "data:buf"] },
+        { "op": "mov",  "args": ["r8d", "256"] },
+        { "op": "lea",  "args": ["r9", "data:nread"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!ReadFile"] },
+        { "op": "mov",  "args": ["rcx", "%v1"] },
+        { "op": "lea",  "args": ["rdx", "data:buf"] },
+        { "op": "mov",  "args": ["r8d", "dword ptr [data:nread]"], "comment": "nbytes = bytes actually read" },
+        { "op": "lea",  "args": ["r9", "data:nwritten"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!WriteFile"] },
+        { "op": "mov",  "args": ["ecx", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!ExitProcess"] }
+      ]
+    }
+  ]
+}

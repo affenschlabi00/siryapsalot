@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "name": "factorial",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Reads a non-negative integer n from stdin and prints n!. Exercises atoi, an imul loop, and itoa via div."
+  },
+  "imports": [
+    { "dll": "kernel32.dll", "function": "GetStdHandle" },
+    { "dll": "kernel32.dll", "function": "ReadFile" },
+    { "dll": "kernel32.dll", "function": "WriteFile" },
+    { "dll": "kernel32.dll", "function": "ExitProcess" }
+  ],
+  "data": [
+    { "label": "buf", "type": "zeros", "size": 256 },
+    { "label": "nread", "type": "u32", "value": 0 },
+    { "label": "written", "type": "u32", "value": 0 },
+    { "label": "outbuf", "type": "zeros", "size": 32 }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        { "op": "mov",   "args": ["ecx", "-11"] },
+        { "op": "call",  "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",   "args": ["%v0", "rax"], "comment": "hStdout (survives calls)" },
+        { "op": "mov",   "args": ["ecx", "-10"] },
+        { "op": "call",  "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",   "args": ["rcx", "rax"], "comment": "hStdin" },
+        { "op": "lea",   "args": ["rdx", "data:buf"] },
+        { "op": "mov",   "args": ["r8d", "256"] },
+        { "op": "lea",   "args": ["r9", "data:nread"] },
+        { "op": "mov",   "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call",  "args": ["import:kernel32.dll!ReadFile"] },
+
+        { "op": "mov",   "args": ["%v1", "0"], "comment": "--- atoi: n = 0" },
+        { "op": "lea",   "args": ["r10", "data:buf"] },
+        { "label": "atoi_loop" },
+        { "op": "movzx", "args": ["eax", "byte ptr [r10]"] },
+        { "op": "cmp",   "args": ["al", "48"] },
+        { "op": "jl",    "args": ["atoi_done"] },
+        { "op": "cmp",   "args": ["al", "57"] },
+        { "op": "jg",    "args": ["atoi_done"] },
+        { "op": "imul",  "args": ["%v1", "%v1", "10"] },
+        { "op": "sub",   "args": ["al", "48"] },
+        { "op": "movzx", "args": ["eax", "al"] },
+        { "op": "add",   "args": ["%v1", "rax"] },
+        { "op": "inc",   "args": ["r10"] },
+        { "op": "jmp",   "args": ["atoi_loop"] },
+        { "label": "atoi_done" },
+
+        { "op": "mov",   "args": ["%v2", "1"], "comment": "--- factorial: fact = 1" },
+        { "op": "mov",   "args": ["rcx", "%v1"], "comment": "i = n" },
+        { "label": "fact_loop" },
+        { "op": "cmp",   "args": ["rcx", "1"] },
+        { "op": "jle",   "args": ["fact_done"] },
+        { "op": "imul",  "args": ["%v2", "rcx"], "comment": "fact *= i" },
+        { "op": "dec",   "args": ["rcx"] },
+        { "op": "jmp",   "args": ["fact_loop"] },
+        { "label": "fact_done" },
+
+        { "op": "mov",   "args": ["rax", "%v2"], "comment": "--- itoa: value to convert" },
+        { "op": "lea",   "args": ["r10", "data:outbuf"] },
+        { "op": "mov",   "args": ["r11", "r10"] },
+        { "op": "add",   "args": ["r11", "31"] },
+        { "op": "mov",   "args": ["byte ptr [r11]", "10"], "comment": "trailing newline" },
+        { "op": "mov",   "args": ["r9", "10"] },
+        { "op": "test",  "args": ["rax", "rax"] },
+        { "op": "jnz",   "args": ["loop_div"] },
+        { "op": "dec",   "args": ["r11"] },
+        { "op": "mov",   "args": ["byte ptr [r11]", "48"], "comment": "value 0 -> '0'" },
+        { "op": "jmp",   "args": ["done_conv"] },
+        { "label": "loop_div" },
+        { "op": "test",  "args": ["rax", "rax"] },
+        { "op": "jz",    "args": ["done_conv"] },
+        { "op": "xor",   "args": ["rdx", "rdx"] },
+        { "op": "div",   "args": ["r9"], "comment": "rdx:rax / 10 -> rax, rem in rdx" },
+        { "op": "add",   "args": ["dl", "48"] },
+        { "op": "dec",   "args": ["r11"] },
+        { "op": "mov",   "args": ["byte ptr [r11]", "dl"] },
+        { "op": "jmp",   "args": ["loop_div"] },
+        { "label": "done_conv" },
+
+        { "op": "lea",   "args": ["rax", "data:outbuf"] },
+        { "op": "add",   "args": ["rax", "32"] },
+        { "op": "sub",   "args": ["rax", "r11"], "comment": "length = (outbuf+32) - first digit" },
+        { "op": "mov",   "args": ["rcx", "%v0"] },
+        { "op": "mov",   "args": ["rdx", "r11"] },
+        { "op": "mov",   "args": ["r8", "rax"] },
+        { "op": "lea",   "args": ["r9", "data:written"] },
+        { "op": "mov",   "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call",  "args": ["import:kernel32.dll!WriteFile"] },
+        { "op": "mov",   "args": ["ecx", "0"] },
+        { "op": "call",  "args": ["import:kernel32.dll!ExitProcess"] }
+      ]
+    }
+  ]
+}

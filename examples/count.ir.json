@@ -1,0 +1,45 @@
+{
+  "metadata": {
+    "name": "count",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Prints the digits 1..5, each on its own line. Exercises loops, branches, and virtual registers held across API calls."
+  },
+  "imports": [
+    { "dll": "kernel32.dll", "function": "GetStdHandle" },
+    { "dll": "kernel32.dll", "function": "WriteFile" },
+    { "dll": "kernel32.dll", "function": "ExitProcess" }
+  ],
+  "data": [
+    { "label": "buf", "type": "zeros", "size": 2 },
+    { "label": "written", "type": "u32", "value": 0 }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        { "op": "mov",  "args": ["ecx", "-11"] },
+        { "op": "call", "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",  "args": ["%v2", "rax"], "comment": "stdout handle (survives calls)" },
+        { "op": "lea",  "args": ["%v0", "data:buf"], "comment": "buffer pointer" },
+        { "op": "mov",  "args": ["byte ptr [%v0+1]", "10"], "comment": "buf[1] = '\\n'" },
+        { "op": "mov",  "args": ["%v1", "1"], "comment": "counter = 1" },
+        { "label": "loop" },
+        { "op": "mov",  "args": ["rax", "%v1"] },
+        { "op": "add",  "args": ["rax", "48"], "comment": "'0' + counter" },
+        { "op": "mov",  "args": ["byte ptr [%v0]", "al"], "comment": "buf[0] = digit" },
+        { "op": "mov",  "args": ["rcx", "%v2"] },
+        { "op": "mov",  "args": ["rdx", "%v0"] },
+        { "op": "mov",  "args": ["r8d", "2"] },
+        { "op": "lea",  "args": ["r9", "data:written"] },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!WriteFile"] },
+        { "op": "inc",  "args": ["%v1"] },
+        { "op": "cmp",  "args": ["%v1", "5"] },
+        { "op": "jle",  "args": ["loop"] },
+        { "op": "mov",  "args": ["ecx", "0"] },
+        { "op": "call", "args": ["import:kernel32.dll!ExitProcess"] }
+      ]
+    }
+  ]
+}
