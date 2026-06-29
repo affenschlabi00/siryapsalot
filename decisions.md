@@ -76,6 +76,14 @@ v1 supports: data movement (`mov`, `lea`, `movzx`, `movsx`), arithmetic/logic
 `call`, conditional `setcc`), and `nop`. `cdq/cqo` for division sign-extension. Anything
 keystone can encode that has **no symbolic operand** also passes through. Expanded later.
 
+## D7 — Product: a chatbot, with pluggable model backends (Anthropic **or** Ollama)
+The product is a chatbot that builds binaries: `bytewright` (terminal) or `bytewright serve`
+(browser GUI). The IR is an internal implementation detail — users never see it; they chat and
+get a `.exe`. The model backend is pluggable (`bytewright/llm.py`, `make_backend`): it uses the
+Anthropic API if `ANTHROPIC_API_KEY` is set, otherwise a local **Ollama** model (auto-detected,
+or `OLLAMA_MODEL`) — so no API key is required. Ollama runs are constrained to JSON output
+(`format=json`) for reliability. The web UI is pure stdlib (`http.server`), no new dependency.
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:

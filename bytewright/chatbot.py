@@ -140,21 +140,18 @@ class Chatbot:
 
 
 class ChatbotGenerator:
-    """The live model behind the chatbot (needs the anthropic SDK + ANTHROPIC_API_KEY)."""
+    """The live model behind the chatbot — Anthropic API or a local Ollama model.
 
-    def __init__(self, model: str | None = None, max_tokens: int = 8192):
-        try:
-            import anthropic
-        except ImportError as e:
-            raise RuntimeError("the chatbot needs the anthropic SDK: pip install anthropic") from e
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            raise RuntimeError("ANTHROPIC_API_KEY is not set — needed for the live chatbot.")
+    Picks a backend automatically (see bytewright.llm.make_backend): Anthropic if
+    ANTHROPIC_API_KEY is set, otherwise a running/ configured Ollama model. No key required.
+    """
+
+    def __init__(self, backend=None, model: str | None = None):
         from .agent import generators, prompt
+        from .llm import make_backend
         self._gen = generators
         self._prompt = prompt
-        self.client = anthropic.Anthropic()
-        self.model = model or os.environ.get("BYTEWRIGHT_MODEL", "claude-sonnet-4-6")
-        self.max_tokens = max_tokens
+        self.backend = backend or make_backend()
 
     def __call__(self, message, feedback, iteration, history):
         msgs = []
@@ -164,10 +161,7 @@ class ChatbotGenerator:
                          "content": f"(built {turn['program_name']}: {turn['explanation']})"})
         user = message if not feedback else f"{message}\n\n[automatic feedback]\n{feedback}"
         msgs.append({"role": "user", "content": user})
-        resp = self.client.messages.create(
-            model=self.model, max_tokens=self.max_tokens, temperature=0.0,
-            system=self._prompt.chatbot_system_prompt(), messages=msgs)
-        text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
+        text = self.backend.chat(self._prompt.chatbot_system_prompt(), msgs)
         return self._gen.extract_json(text)
 
 

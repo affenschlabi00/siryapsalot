@@ -1,11 +1,19 @@
 # Sir Yaps-a-Lot (`bytewright`)
 
-> An AI system that takes human intent and produces a working Windows `.exe` directly —
-> no C, no Rust, no high-level source. The model reasons in a machine-level Intermediate
-> Representation (IR); a trusted, deterministic backend encodes and links that IR into a
-> valid Portable Executable; an emulated harness runs and inspects it.
+> **A chatbot that builds Windows binaries.** Tell it what you want — *"make me a tic-tac-toe
+> game"* — and it ships a working `.exe`. No C, no Rust, no source code, and nothing technical
+> from you. Works with the Anthropic API **or a local Ollama model** (no API key needed).
 
-This repository implements the [execution plan](docs/this-plan.md). The core idea:
+```bash
+pip install -e .
+bytewright            # start chatting (terminal)
+bytewright serve      # …or a browser chat UI
+```
+
+Under the hood the model emits a verifiable machine-level representation that a trusted,
+deterministic backend links into a real Portable Executable, and an emulated harness runs and
+self-tests it — **but you never see any of that; you just chat.** This repository implements the
+[execution plan](docs/this-plan.md). The internals:
 
 ```
 intent ─▶ Generator ─▶ IR (JSON) ─▶ Backend (deterministic) ─▶ .exe ─▶ Harness (emulated) ─▶ feedback ─┐
@@ -24,7 +32,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 0 | Scope, repo, frozen IR schema | ✅ done |
 | 1 | Harness / MCP server (the judge) | ✅ core done (Unicorn emulator + all §6 tools + MCP) |
 | 2 | Deterministic backend (IR → .exe) | ✅ done (loops, branches, arithmetic, div/mul, stdin, file I/O, multi-procedure call/ret) |
-| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ `chat`/`create` chatbot + self-test + repair loop + 9-task eval suite |
+| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval; **Anthropic or local Ollama** |
 | 4 | Training-data factory | 🟡 harvester emits verified (intent→IR), (intent→raw bytes), and repair-trajectory samples; SFT formatter |
 | 5 | Train: distill, then RLVR | 🟡 dense reward ladder (scores IR *and* raw bytes) + an `RLEnv` (harness-as-reward); training run gated on compute |
 | 6 | Harden & expand | 🟡 GUI (user32 MessageBox), positioned/colored console, a real playable game (Tic-Tac-Toe), and the **raw-bytes path** (model emits literal machine code → binary); angr verification still planned |
@@ -36,26 +44,33 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 
 ## Just talk to it
 
-It's a chatbot that builds binaries. You say what you want — no flags, no formats, no test
-cases — and it ships a `.exe`. The model writes the IR *and its own self-tests*; the harness
-builds, runs, and checks those tests, feeding any crash or mismatch back for repair until it
-works.
+You say what you want — no flags, no formats, no test cases — and it ships a `.exe`. Internally
+the model writes the program *and its own self-tests*; the harness builds, runs, and checks them,
+feeding any crash or mismatch back for repair until it works. You only ever see the result.
+
+**Pick a model backend (no API key required):**
 
 ```bash
-pip install -e ".[ai]"                 # adds the anthropic SDK
-export ANTHROPIC_API_KEY=sk-...        # (optional) export BYTEWRIGHT_MODEL=claude-...
+# Option A — local & free with Ollama (https://ollama.com):
+ollama pull qwen2.5-coder            # any capable model works
+export OLLAMA_MODEL=qwen2.5-coder    # a running Ollama server is also auto-detected
 
-python -m bytewright.cli chat          # then just type:
-#   you> make me a christmas tree
-#   bot> Done — I built christmas_tree.exe.  *  / *** / ***** ...
-#   you> now something that tells me if a number is prime
-#   bot> Done — I built prime.exe.  (self-tested: 7 -> prime, 8 -> not prime)
+# Option B — Anthropic API:
+pip install -e ".[ai]" && export ANTHROPIC_API_KEY=sk-...
 ```
 
-One-shot, same thing:
+**Then just chat:**
 
 ```bash
-python -m bytewright.cli create "print the fibonacci numbers below 100"
+bytewright            # terminal chat (no subcommand needed)
+bytewright serve      # browser chat UI at http://127.0.0.1:8765 with download buttons
+```
+
+```text
+you> make me a christmas tree
+bot> Done — I built christmas_tree.exe.   *  / *** / ***** / ...
+you> now something that tells me if a number is prime
+bot> Done — I built prime.exe.  (self-tested: 7 -> prime, 8 -> not prime)
 ```
 
 **Scope, honestly.** Bytewright builds:

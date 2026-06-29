@@ -18,8 +18,10 @@ def _print(obj):
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="bytewright", description="intent -> verifiable IR -> .exe")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    p = argparse.ArgumentParser(
+        prog="bytewright",
+        description="A chatbot that builds Windows binaries. Just run `bytewright` and chat.")
+    sub = p.add_subparsers(dest="cmd")   # no subcommand -> chat
 
     b = sub.add_parser("build", help="compile IR JSON to a .exe")
     b.add_argument("ir"); b.add_argument("-o", "--out")
@@ -52,7 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     cr.add_argument("intent", help='e.g. "make me a game" or "print the first 10 primes"')
     cr.add_argument("--max-iters", type=int, default=6)
 
-    sub.add_parser("chat", help="conversational: just tell it what to build")
+    sub.add_parser("chat", help="conversational: just tell it what to build (default)")
+
+    sv = sub.add_parser("serve", help="open a browser chat UI to build binaries")
+    sv.add_argument("--port", type=int, default=8765)
 
     rw = sub.add_parser("reward", help="score a task's reference IR on the dense reward ladder")
     rw.add_argument("task")
@@ -65,6 +70,19 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
 
+    if args.cmd is None or args.cmd == "chat":
+        return _chat()
+    if args.cmd == "serve":
+        from .web import serve
+        try:
+            serve(port=args.port)
+        except Exception as e:
+            from .llm import LLMUnavailable
+            if isinstance(e, LLMUnavailable):
+                print(e)
+                return 1
+            raise
+        return 0
     if args.cmd == "build":
         rep = harness.build_binary(_load_ir(args.ir), args.out)
         _print(rep)
@@ -108,8 +126,6 @@ def main(argv: list[str] | None = None) -> int:
         res = bot.send(args.intent, verbose=True)
         print("\n" + res["reply"])
         return 0 if res["success"] else 1
-    if args.cmd == "chat":
-        return _chat()
     if args.cmd == "reward":
         from .reward import reward
         from .eval import TASKS_BY_NAME, library_get_ir
@@ -133,12 +149,14 @@ def main(argv: list[str] | None = None) -> int:
 def _chat() -> int:
     from .chatbot import Chatbot, ChatbotGenerator
     try:
-        bot = Chatbot(ChatbotGenerator())
-    except RuntimeError as e:
-        print(f"chat needs a model: {e}")
-        print('Set ANTHROPIC_API_KEY and `pip install -e ".[ai]"`, then try again.')
+        gen = ChatbotGenerator()
+    except Exception as e:
+        print(e)                      # LLMUnavailable carries a friendly how-to message
         return 1
-    print("bytewright - tell me what to build and I'll make you a .exe. (Ctrl-D to quit)")
+    bot = Chatbot(gen)
+    b = gen.backend
+    print(f"Sir Yaps-a-Lot — using {b.name} ({getattr(b, 'model', '?')}).")
+    print("Tell me what to build and I'll make you a .exe. (Ctrl-D to quit)")
     while True:
         try:
             msg = input("\nyou> ").strip()
