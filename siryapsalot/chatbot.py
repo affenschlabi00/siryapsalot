@@ -50,6 +50,15 @@ def _check(test: dict, run: dict) -> tuple[bool, str]:
     if test.get("expect_sound"):
         if not run.get("sounds"):
             return False, "the program did not play any sound (expected a Beep/MessageBeep/PlaySound)"
+    if test.get("expect_event"):
+        want = test["expect_event"]
+        fired = [e for e in run.get("events", [])
+                 if want in str(e.get("message", "")) and e.get("ok")]
+        if not fired:
+            seen = " | ".join(f"{e.get('message')}{'' if e.get('ok') else ' (faulted)'}"
+                              for e in run.get("events", [])) or "none"
+            return False, (f"the window-proc handler for {want!r} did not fire cleanly "
+                           f"(events dispatched: {seen})")
     return True, ""
 
 
@@ -193,6 +202,11 @@ class Chatbot:
             extras.append(f"controls: {labels}")
         if run.get("sounds"):
             extras.append(f"plays {len(run['sounds'])} sound(s) 🔊")
+        live = [e for e in run.get("events", [])
+                if e.get("ok") and ("WM_COMMAND" in str(e.get("message", ""))
+                                    or "WM_PAINT" in str(e.get("message", "")))]
+        if live:
+            extras.append(f"reacts to {len(live)} live event(s) 🖱️")
         if extras:
             lines.append("    (" + "; ".join(extras) + ")")
 

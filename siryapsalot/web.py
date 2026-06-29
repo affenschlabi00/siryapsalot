@@ -1,8 +1,10 @@
 """A local web GUI for the chatbot: open a browser, chat, download binaries.
 
 Pure stdlib (http.server) — no extra dependencies. `siryapsalot serve` starts it. The page lets
-you pick the persona (Lil Yapper / Yapzilla) and the LLM model, chat to build .exe files, and
-hit an Update button to pull the newest code from the public repo (and switch branches).
+you pick the persona (Lil Yapper / Yapzilla), the LLM provider (OpenAI / Anthropic / Ollama) and
+— per provider — which model it uses, chat to build .exe files, and hit an Update button to pull
+the newest code from the public repo (and switch branches). Choosing a provider refreshes the
+model list to that provider's models (e.g. pick Ollama → its local models; pick OpenAI → gpt-*).
 """
 from __future__ import annotations
 
@@ -24,7 +26,12 @@ class ChatService:
         self.bot = bot
         self.build_dir = build_dir
 
-    def message(self, text: str, mode=None, model=None) -> dict:
+    def message(self, text: str, mode=None, model=None, backend=None) -> dict:
+        if backend and backend != getattr(self.bot.backend, "name", None):
+            try:
+                self.bot.set_backend(backend)
+            except Exception:
+                pass                                  # keep the working backend if the switch fails
         if mode:
             self.bot.switch(mode)
         if model:
@@ -36,17 +43,33 @@ class ChatService:
         return {"reply": res["reply"], "success": res["success"], "persona": persona,
                 "download": download, "iterations": res.get("iterations")}
 
-    def info(self) -> dict:
-        from . import modes, updater
+    def _backend_info(self) -> dict:
+        """The current provider, its model, and the models it offers (for the model picker)."""
         b = self.bot.backend
         try:
             models = self.bot.models()
         except Exception:
             models = []
+        return {"backend": getattr(b, "name", "?"), "model": getattr(b, "model", "?"),
+                "models": models}
+
+    def set_backend(self, name: str) -> dict:
+        """Switch the LLM provider and report its models, so the model dropdown can refresh."""
+        try:
+            self.bot.set_backend(name)
+            return {"ok": True, **self._backend_info()}
+        except Exception as e:
+            return {"ok": False, "error": str(e), **self._backend_info()}
+
+    def info(self) -> dict:
+        from . import llm, modes, updater
+        bi = self._backend_info()
+        backends = llm.available_backends()
+        if bi["backend"] not in backends and bi["backend"] != "?":
+            backends = [bi["backend"]] + backends      # always show the one in use
         return {
-            "backend": getattr(b, "name", "?"),
-            "model": getattr(b, "model", "?"),
-            "models": models,
+            **bi,
+            "backends": backends,
             "modes": [{"id": m.id, "name": m.name} for m in modes.MODES.values()],
             "mode": self.bot.mode.id if self.bot.mode else None,
             **updater.status(),
@@ -87,6 +110,7 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <header>
  <b>Sir Yaps-a-Lot</b>
  <select id="mode" title="who you're chatting with"></select>
+ <select id="backend" title="LLM provider"></select>
  <select id="model" title="LLM model"></select>
  <span class="grow"></span>
  <select id="branch" title="git branch"></select>
@@ -99,6 +123,7 @@ Try: "make me a tic-tac-toe game", "primes under 50", or (as Yapzilla) "a window
 <script>
 const log=document.getElementById('log'),inp=document.getElementById('in'),f=document.getElementById('f'),
       send=document.getElementById('send'),modeSel=document.getElementById('mode'),
+      backendSel=document.getElementById('backend'),
       modelSel=document.getElementById('model'),branchSel=document.getElementById('branch'),
       upd=document.getElementById('upd'),ver=document.getElementById('ver');
 function fill(sel,items,cur){sel.innerHTML='';items.forEach(it=>{const o=document.createElement('option');
@@ -109,16 +134,24 @@ function add(cls,txt,dl){const d=document.createElement('div');d.className='msg 
   log.appendChild(d);log.scrollTop=log.scrollHeight;}
 async function loadInfo(){const j=await (await fetch('/api/info')).json();
   fill(modeSel,j.modes.map(m=>({value:m.id,label:m.name})),j.mode);
+  fill(backendSel,(j.backends||[j.backend]).map(b=>({value:b,label:b})),j.backend);
   fill(modelSel,(j.models||[]).map(m=>({value:m,label:m})),j.model);
   if(j.available){fill(branchSel,(j.branches||[]).map(b=>({value:b,label:'🌿 '+b})),j.branch);
     ver.textContent=(j.backend||'')+' · '+(j.model||'')+' · @'+(j.commit||'?');}
   else{branchSel.style.display='none';upd.title='updates need a git checkout (pip install -e .)';
     ver.textContent=(j.backend||'')+' · '+(j.model||'');}}
+backendSel.onchange=async()=>{const prev=modelSel.innerHTML;modelSel.innerHTML='<option>…</option>';
+  try{const j=await (await fetch('/api/backend',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({backend:backendSel.value})})).json();
+    if(j.ok===false){add('sys','⚠️ could not switch to '+backendSel.value+': '+(j.error||''));modelSel.innerHTML=prev;return;}
+    fill(modelSel,(j.models||[]).map(m=>({value:m,label:m})),j.model);
+    ver.textContent=(j.backend||'')+' · '+(j.model||'');}
+  catch(err){add('sys','backend switch error: '+err);modelSel.innerHTML=prev;}};
 f.onsubmit=async e=>{e.preventDefault();const m=inp.value.trim();if(!m)return;
   add('me',m);inp.value='';send.disabled=true;
   const t=document.createElement('div');t.className='msg bot';t.textContent='building…';log.appendChild(t);
   try{const r=await fetch('/api/build',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:m,mode:modeSel.value,model:modelSel.value})});
+      body:JSON.stringify({message:m,mode:modeSel.value,model:modelSel.value,backend:backendSel.value})});
     const j=await r.json();t.remove();add('bot',(j.persona?j.persona+': ':'')+j.reply,j.download);}
   catch(err){t.remove();add('bot','Error: '+err);}
   send.disabled=false;inp.focus();};
@@ -183,10 +216,15 @@ def make_handler(service: ChatService):
             if self.path == "/api/build":
                 try:
                     out = service.message(body["message"], mode=body.get("mode"),
-                                          model=body.get("model"))
+                                          model=body.get("model"), backend=body.get("backend"))
                 except Exception as e:
                     out = {"reply": f"Sorry, that failed: {e}", "success": False, "download": None}
                 self._json(out)
+            elif self.path == "/api/backend":
+                try:
+                    self._json(service.set_backend(body.get("backend")))
+                except Exception as e:
+                    self._json({"ok": False, "error": str(e)})
             elif self.path == "/api/update":
                 try:
                     self._json(service.update(body.get("branch")))

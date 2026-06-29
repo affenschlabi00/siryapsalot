@@ -31,6 +31,7 @@ def run(path: str, stdin: str | bytes = b"", args: list | None = None,
         "windows": res["windows"],
         "controls": res["controls"],
         "sounds": res["sounds"],
+        "events": res["events"],
         "screen": res["screen"],
     }
 

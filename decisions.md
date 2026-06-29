@@ -89,9 +89,9 @@ The harness implements `user32` GUI APIs (`MessageBoxA`, `RegisterClassExA`, `Cr
 `ShowWindow`, the `GetMessageA` message loop, etc.) and *records* dialogs and windows
 (title/size). `GetMessageA` returns 0 so a standard message loop exits cleanly under emulation;
 the emitted `.exe` is a genuine Win32 GUI program that shows a window on real Windows. A new
-`code:LABEL` operand takes a function pointer to a procedure (e.g. the window proc). What's not
-emulated yet: interactive control/click handling, real-time input, graphics, sound. The chatbot
-self-tests GUI programs with `expect_dialog_contains` / `expect_window_contains`.
+`code:LABEL` operand takes a function pointer to a procedure (e.g. the window proc). The chatbot
+self-tests GUI programs with `expect_dialog_contains` / `expect_window_contains`. (Interactive
+control/click handling was added later — see **D11**; real-time input and graphics remain out.)
 
 ## D9 — Switchable personas (Lil Yapper / Yapzilla) + sound & controls
 The chatbot has two switchable personas (`siryapsalot/modes.py`) — like a model switcher, but for
@@ -103,8 +103,8 @@ the builder's vibe and capability surface, not the LLM:
 Both run the same harness; the mode only changes the persona text and which APIs the prompt
 offers. Switch via `-m/--mode`, the terminal `/switch`, or the web UI dropdown. The harness records
 controls and sounds (they execute in `main`, so they really run under emulation; on Windows they
-show/play). Self-tests gain `expect_control_contains` and `expect_sound`. Controls/keys reacting to
-*live* clicks remain out of scope (no WM dispatch).
+show/play). Self-tests gain `expect_control_contains` and `expect_sound`. (Controls reacting to
+*live* clicks was originally out of scope; **D11** adds it.)
 
 ## D10 — Model providers (OpenAI/Anthropic/Ollama) + self-update
 - **Backends** (`siryapsalot/llm.py`): OpenAI/ChatGPT, Anthropic, and Ollama all implement
@@ -113,11 +113,44 @@ show/play). Self-tests gain `expect_control_contains` and `expect_sound`. Contro
   (`/backend`, `/model`, `--backend/--model`, or the web dropdowns); `make_backend` auto-detects
   from env (OpenAI key → Anthropic key → running Ollama). OpenAI is called over stdlib `urllib`
   (no SDK dependency).
+- **Per-provider model picker in the web UI**: the top bar has a **provider** dropdown next to a
+  **model** dropdown. `llm.available_backends()` lists only the providers that can be constructed
+  right now (key present / Ollama reachable). `POST /api/backend` switches the provider and returns
+  *its* model list, so choosing a provider refreshes the model dropdown to that provider's models
+  (Ollama → local models, OpenAI → `gpt-*`/`o*`, Anthropic → Claude). `ChatService.set_backend`
+  fails soft — an unavailable provider returns `{ok:false, error}` and the working one is kept.
 - **Self-update** (`siryapsalot/updater.py`): the repo is public, so the app can `git fetch` +
   fast-forward `pull` and switch branches (`ls-remote` lists remote branches read-only). Exposed
   as the web **Update** button (+ branch dropdown) and `siryapsalot update [--branch]` / `/update`.
   Requires an editable install (`pip install -e .`) so the code lives in the checkout; restart to
   load new code.
+
+## D11 — Interactive event layer: dispatch WM_* into the guest window proc (Plan §6)
+GUI programs were static under emulation: `main` ran (registering the window class, creating
+windows/controls) and the message loop exited because `GetMessageA` returns 0, so a button's
+click handler never executed. D11 closes that gap **without** real-time input: after `main`
+finishes, the harness **pumps a synthetic message sequence into the registered window proc** —
+`WM_CREATE` → `WM_PAINT` → one `WM_COMMAND` per child control (with `wParam` = that control's id)
+→ `WM_DESTROY` — so the program's own click/paint handlers actually run and their effects
+(sounds, dialogs, drawing, `SetWindowTextA`) are recorded.
+
+How (re-entrancy is the hard part): you cannot call the guest window proc from *inside* an API
+hook (that hook is mid-instruction). So dispatch is a **separate phase 2** after the main
+`emu_start` returns. `_call_guest` sets up a fresh 16-aligned frame, pushes a sentinel return
+address `EVENT_RET` (a `ret` byte in the hook page), loads the four args per the MS x64
+convention, and runs `emu_start(proc, until=EVENT_RET)` — a clean top-level call that stops when
+the proc returns. The window proc is captured at `RegisterClassExA` time (read from
+`WNDCLASSEXA.lpfnWndProc`, offset 8); each control's id/HWND is captured at `CreateWindowExA`.
+
+Fault isolation: a buggy handler must not fail the whole program. A `phase` flag tells the
+unmapped-memory hook to record a fault **locally** (per event, `ok:false` + fault detail) instead
+of marking the run crashed, and each `_call_guest` is wrapped so a `UcError` only ends that one
+event. The chatbot gains an `expect_event` self-test ("this message's handler must run cleanly"),
+and the success reply notes when an app "reacts to N live event(s) 🖱️". Demonstrated by
+`examples/click_beeps.ir.json`: `main` makes **no** sound, yet the window proc beeps on `WM_PAINT`
+(MessageBeep) and `WM_COMMAND` (Beep 880) — so any recorded sound proves the events were
+dispatched. Still out of scope: real-time continuous input (held keys, mouse-move, animation) and
+graphics/sprites — so a live-action graphical "tetris" remains future work.
 
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,

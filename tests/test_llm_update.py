@@ -128,6 +128,49 @@ def test_web_info_reports_backend_and_models(build_dir):
         info = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/info", timeout=5).read())
         assert info["backend"] == "fake"
         assert "m1" in info["models"]
+        assert info["backends"] == ["fake"]          # the in-use backend is always offered
         assert any(m["name"] == "Yapzilla" for m in info["modes"])
     finally:
         httpd.shutdown()
+
+
+def test_available_backends_reflects_env(monkeypatch):
+    for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OLLAMA_MODEL", "SIRYAPSALOT_BACKEND"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(llm, "_ollama_reachable", lambda host: False)
+    assert llm.available_backends() == []
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-x")
+    assert "openai" in llm.available_backends()
+
+
+class _OtherBackend(llm.LLMBackend):
+    name = "openai"
+    model = "gpt-4o-mini"
+
+    def list_models(self):
+        return ["gpt-4o-mini", "gpt-4o", "o4-mini"]
+
+    def chat(self, *a, **k):
+        return "{}"
+
+
+def test_web_set_backend_switches_provider_and_refreshes_models(build_dir, monkeypatch):
+    """Picking a provider returns that provider's models — the heart of the per-backend picker."""
+    svc = ChatService(bot=Chatbot(_fake_gen()), build_dir=build_dir)
+    assert svc._backend_info()["backend"] == "fake"
+    monkeypatch.setattr(llm, "make_backend", lambda prefer=None: _OtherBackend())
+    out = svc.set_backend("openai")
+    assert out["ok"] and out["backend"] == "openai"
+    assert "gpt-4o" in out["models"] and "m1" not in out["models"]   # model list followed the switch
+
+
+def test_web_set_backend_failure_keeps_current(build_dir, monkeypatch):
+    svc = ChatService(bot=Chatbot(_fake_gen()), build_dir=build_dir)
+
+    def boom(prefer=None):
+        raise llm.LLMUnavailable("no key for " + str(prefer))
+
+    monkeypatch.setattr(llm, "make_backend", boom)
+    out = svc.set_backend("openai")
+    assert out["ok"] is False and "no key" in out["error"]
+    assert svc._backend_info()["backend"] == "fake"                 # unchanged on failure

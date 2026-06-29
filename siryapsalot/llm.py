@@ -140,6 +140,29 @@ def _ollama_reachable(host: str) -> bool:
         return False
 
 
+def backend_available(name: str) -> bool:
+    """Can backend `name` be constructed right now (key present / server reachable)?"""
+    if name == "openai":
+        return bool(os.environ.get("OPENAI_API_KEY"))
+    if name == "anthropic":
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            return False
+        try:
+            import anthropic  # noqa: F401
+            return True
+        except Exception:
+            return False
+    if name == "ollama":
+        return bool(os.environ.get("OLLAMA_MODEL")) or _ollama_reachable(
+            os.environ.get("OLLAMA_HOST", "http://localhost:11434"))
+    return False
+
+
+def available_backends() -> list[str]:
+    """The provider names the user can switch to right now (for the UI's backend picker)."""
+    return [n for n in _BACKENDS if backend_available(n)]
+
+
 def make_backend(prefer: str | None = None) -> LLMBackend:
     """Pick a backend: explicit > OpenAI key > Anthropic key > running Ollama."""
     prefer = prefer or os.environ.get("SIRYAPSALOT_BACKEND")

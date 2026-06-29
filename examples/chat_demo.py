@@ -23,6 +23,11 @@ def _spec(name, explanation, tests):
 def claude_model(message, feedback, iteration, history):
     """Stand-in for the live model: message -> {program_name, explanation, ir, self_tests}."""
     m = message.lower()
+    if "click" in m or "interactive" in m or "react" in m:
+        return _spec("click_beeps",
+                     "an interactive window: its button beeps when clicked (the WM_COMMAND handler "
+                     "really runs) and it chimes on repaint",
+                     [{"stdin": "", "expect_event": "WM_COMMAND", "expect_sound": True}])
     if "deluxe" in m or "button" in m or "sound" in m or "beep" in m:
         return _spec("gui_deluxe", "a real window with a button — and it beeps!",
                      [{"stdin": "", "expect_control_contains": "Click me!", "expect_sound": True}])
@@ -86,7 +91,8 @@ def main():
     print("#" * 72)
     bot.switch("yapzilla")
     print(f"\n💬 chatting with {bot.mode.name} — {bot.mode.tagline}\n")
-    for msg in ["build me a deluxe window with a button and sound"]:
+    for msg in ["build me a deluxe window with a button and sound",
+                "now make a window with a button that beeps when I click it"]:
         print("=" * 72 + f"\nyou> {msg}\n")
         print(f"{bot.mode.name}> " + bot.send(msg)["reply"])
 

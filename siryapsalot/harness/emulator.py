@@ -26,6 +26,7 @@ STACK_BASE, STACK_SIZE = 0x00100000, 0x00200000
 HEAP_BASE, HEAP_SIZE = 0x00600000, 0x00400000
 HOOK_BASE, HOOK_SIZE = 0x7FFF0000, 0x00001000
 SENTINEL = HOOK_BASE            # initial return address -> clean process exit
+EVENT_RET = HOOK_BASE + 0x800   # return address for dispatched WM_* events (a `ret` in the page)
 
 _GP = {
     "rax": UC_X86_REG_RAX, "rbx": UC_X86_REG_RBX, "rcx": UC_X86_REG_RCX,
@@ -121,6 +122,9 @@ class EmuContext:
         self.windows: list[dict] = []          # top-level CreateWindowEx calls (GUI)
         self.controls: list[dict] = []         # child controls: buttons, edits, … (GUI)
         self.sounds: list[dict] = []           # Beep / MessageBeep / PlaySound (audio)
+        self.events: list[dict] = []           # WM_* messages dispatched into the window proc
+        self.wndproc: int | None = None        # the registered window-proc address
+        self.main_hwnd: int | None = None      # first top-level window's HWND
         self.console = VirtualConsole()         # screen buffer for positioned drawing
         self.image_base = emu.image_base
         self._next_handle = 0x100
@@ -247,6 +251,7 @@ class Emulator:
         pending = {"step": None}
         prev_regs = {"v": None}
         cur_mem: list = []
+        phase = {"event": False, "fault": None}   # event=True while dispatching WM_* into wndproc
 
         def finalize(now_regs):
             st = pending["step"]
@@ -317,12 +322,16 @@ class Emulator:
                     UC_MEM_FETCH_UNMAPPED: "execute access violation"}.get(access, "access violation")
             rip = mu.reg_read(UC_X86_REG_RIP)
             mn, ops, raw = self._disasm_at(rip)
-            state["crashed"] = True
-            state["fault"] = {
+            fault = {
                 "fault_addr": f"{rip:#x}", "access": kind, "target_addr": f"{address:#x}",
                 "fault_instruction": {"mnemonic": mn, "operands": ops, "bytes": raw.hex()},
                 "registers": {k: f"{v:#x}" for k, v in self.regs().items()},
             }
+            if phase["event"]:                 # a fault inside an event handler stays local
+                phase["fault"] = fault
+            else:
+                state["crashed"] = True
+                state["fault"] = fault
             return False  # do not retry -> emulation stops with UcError
 
         self.mu.hook_add(UC_HOOK_CODE, hook_code)
@@ -345,6 +354,10 @@ class Emulator:
         if record and pending["step"] is not None:
             finalize(self.regs())
 
+        # ---- phase 2: dispatch live WM_* events into the window proc (interactive GUI) ----
+        if self.ctx.wndproc and not state["crashed"] and not state["truncated"]:
+            self._pump_events(phase, max_steps)
+
         state["exit_code"] = self.ctx.exit_code
         state["stdout"] = bytes(self.ctx.stdout)
         state["stderr"] = bytes(self.ctx.stderr)
@@ -353,8 +366,45 @@ class Emulator:
         state["windows"] = list(self.ctx.windows)
         state["controls"] = list(self.ctx.controls)
         state["sounds"] = list(self.ctx.sounds)
+        state["events"] = list(self.ctx.events)
         state["screen"] = self.ctx.console.render()
         return state
+
+    # ---- interactive event dispatch -------------------------------------
+    def _call_guest(self, func: int, a1: int, a2: int, a3: int, a4: int, max_steps: int):
+        """Call a guest function (the window proc) with the x64 convention; stop on its return."""
+        mask = 0xFFFFFFFFFFFFFFFF
+        rsp = ((STACK_BASE + STACK_SIZE - 0x4000) & ~0xF) - 8   # fresh frame, 16-aligned -8
+        self.mu.mem_write(rsp, EVENT_RET.to_bytes(8, "little"))
+        self.mu.reg_write(UC_X86_REG_RSP, rsp)
+        self.mu.reg_write(UC_X86_REG_RCX, a1 & mask)
+        self.mu.reg_write(UC_X86_REG_RDX, a2 & mask)
+        self.mu.reg_write(UC_X86_REG_R8, a3 & mask)
+        self.mu.reg_write(UC_X86_REG_R9, a4 & mask)
+        self.mu.emu_start(func, EVENT_RET, 0, max_steps)   # stops when the proc returns to EVENT_RET
+
+    def _pump_events(self, phase, max_steps: int):
+        """Simulate the OS pumping messages: WM_CREATE, WM_PAINT, a click per button, WM_DESTROY."""
+        hwnd = self.ctx.main_hwnd or 0x10000
+        seq = [("WM_CREATE", 0x0001, 0, 0), ("WM_PAINT", 0x000F, 0, 0)]
+        for c in self.ctx.controls:
+            if c.get("id"):
+                seq.append((f"WM_COMMAND(id={c['id']})", 0x0111, c["id"], c.get("hwnd", 0)))
+        seq.append(("WM_DESTROY", 0x0002, 0, 0))
+
+        phase["event"] = True
+        for name, msg, wp, lp in seq:
+            phase["fault"] = None
+            entry = {"message": name}
+            try:
+                self._call_guest(self.ctx.wndproc, hwnd, msg, wp, lp, max_steps)
+            except UcError:
+                pass
+            entry["ok"] = phase["fault"] is None
+            if phase["fault"]:
+                entry["fault"] = phase["fault"]
+            self.ctx.events.append(entry)
+        phase["event"] = False
 
     def _snapshot(self) -> dict:
         rsp = self.mu.reg_read(UC_X86_REG_RSP)

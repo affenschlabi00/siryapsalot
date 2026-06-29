@@ -294,6 +294,16 @@ def _GetModuleHandleA(ctx):
 
 
 def _RegisterClassExA(ctx):
+    # WNDCLASSEXA: cbSize(0), style(4), lpfnWndProc(8) — remember the window proc so the harness
+    # can later dispatch WM_* messages into it (live click/paint handling).
+    p = ctx.arg(1)
+    if p and p >= 0x1000:
+        try:
+            wp = int.from_bytes(ctx.read_mem(p + 8, 8), "little")
+            if wp:
+                ctx.wndproc = wp
+        except Exception:
+            pass
     return 1  # a nonzero class atom
 
 
@@ -321,11 +331,16 @@ def _CreateWindowExA(ctx):
         return "default" if v == 0x80000000 else v   # CW_USEDEFAULT
 
     if cls.lower() in _CONTROL_CLASSES or parent:
-        ctx.controls.append({"class": cls or "control", "text": text})
-        return 0x00020000 + len(ctx.controls) * 4
+        hwnd = 0x00020000 + len(ctx.controls) * 4
+        ctx.controls.append({"class": cls or "control", "text": text,
+                             "id": ctx.arg(10) & 0xFFFFFFFF, "hwnd": hwnd})  # arg10 = hMenu = id
+        return hwnd
+    hwnd = 0x00010000 + len(ctx.windows) * 4          # a fake but nonzero HWND
     ctx.windows.append({"title": text, "class": cls, "width": dim(ctx.arg(7)),
-                        "height": dim(ctx.arg(8))})
-    return 0x00010000 + len(ctx.windows) * 4          # a fake but nonzero HWND
+                        "height": dim(ctx.arg(8)), "hwnd": hwnd})
+    if ctx.main_hwnd is None:
+        ctx.main_hwnd = hwnd
+    return hwnd
 
 
 def _SetWindowTextA(ctx):

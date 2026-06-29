@@ -37,7 +37,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval; **OpenAI / Anthropic / local Ollama** + model switcher + self-update |
 | 4 | Training-data factory | 🟡 harvester emits verified (intent→IR), (intent→raw bytes), and repair-trajectory samples; SFT formatter |
 | 5 | Train: distill, then RLVR | 🟡 dense reward ladder (scores IR *and* raw bytes) + an `RLEnv` (harness-as-reward); training run gated on compute |
-| 6 | Harden & expand | 🟡 GUI (message boxes, **real windows, buttons/controls, sound**), **persona switcher** (Lil Yapper / Yapzilla), positioned/colored console, a real game (Tic-Tac-Toe), and the **raw-bytes path**; angr verification still planned |
+| 6 | Harden & expand | 🟡 GUI (message boxes, **real windows, clickable buttons/controls, sound**, **live WM_COMMAND/WM_PAINT dispatch**), **persona switcher** (Lil Yapper / Yapzilla), positioned/colored console, a real game (Tic-Tac-Toe), and the **raw-bytes path**; angr verification still planned |
 
 > Phases 4–5 are *scaffolded and tested* (harvester, SFT formatter, reward ladder, RL
 > environment), but the actual training run — and the full data factory (compiling a source
@@ -64,15 +64,18 @@ ollama pull qwen2.5-coder
 export OLLAMA_MODEL=qwen2.5-coder     # a running Ollama server is also auto-detected
 ```
 
-**Switch model/provider any time** — pick a different ChatGPT model from the dropdown in the web
-UI, or in the terminal: `/models` (list), `/model gpt-4o` (switch), `/backend openai|anthropic|ollama`.
-At launch: `siryapsalot --backend openai --model gpt-4o`.
+**Switch provider & model any time.** In the **web UI** the top bar has a **provider** dropdown
+(OpenAI / Anthropic / Ollama — only the ones you have set up) next to a **model** dropdown; pick a
+provider and the model list refreshes to *that* provider's models (Ollama → your local models,
+OpenAI → the `gpt-*`/`o*` models on your key, Anthropic → the Claude models). In the terminal:
+`/models` (list), `/model gpt-4o` (switch model), `/backend openai|anthropic|ollama` (switch
+provider). At launch: `siryapsalot --backend openai --model gpt-4o`.
 
 **Then just chat:**
 
 ```bash
 siryapsalot            # terminal chat (no subcommand needed)
-siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 (model picker + Update button)
+siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 (provider+model pickers, Update button)
 ```
 
 ```text
@@ -90,15 +93,15 @@ builder's vibe + powers):
 | Persona | Vibe | Builds |
 |---|---|---|
 | 🙂 **Lil Yapper** *(classic)* | the humble OG, keeps it simple | console apps, text games, basic windows & message boxes |
-| 😈 **Yapzilla** *(deluxe)* | the maxed-out beast | **full GUI** — windows with **buttons & controls** — and **SOUND** 🔊 |
+| 😈 **Yapzilla** *(deluxe)* | the maxed-out beast | **full GUI** — windows with **clickable buttons & controls** — and **SOUND** 🔊 |
 
 ```bash
 siryapsalot -m yapzilla        # start as the deluxe builder
 # …or switch mid-chat:
 you ▶ /who                     # list personas
 you ▶ /switch yapzilla         # change who you're talking to
-you ▶ build me a window with a button that beeps
-Yapzilla ▶ Done — gui_deluxe.exe  (controls: [Click me!]; plays 1 sound 🔊)
+you ▶ build me a window with a button that beeps when clicked
+Yapzilla ▶ Done — click_beeps.exe  (controls: [Beep!]; plays 2 sound(s) 🔊; reacts to 2 live event(s) 🖱️)
 ```
 
 In the browser UI (`siryapsalot serve`) there's a dropdown in the top-right to pick the persona.
@@ -129,10 +132,16 @@ clone installed with `pip install -e .` (so the code lives in your checkout).*
   message loop), and in **Yapzilla** mode: **child controls** (buttons, etc.) and **sound**
   (`Beep`/`MessageBeep`/`PlaySound`). e.g. *"a window with a button that beeps"* → a genuine
   GUI+audio `.exe`.
+- **interactive windows** — the harness now **dispatches window messages into your window proc**
+  (`WM_CREATE` → `WM_PAINT` → a `WM_COMMAND` per button → `WM_DESTROY`), so a button's **click
+  handler** and your **paint handler** actually run and their effects are recorded. *"a window
+  with a button that beeps when clicked"* builds a window whose `WM_COMMAND` handler beeps — the
+  beep happens **because the click was dispatched**, not from `main`.
 
-It can't *yet* make controls *react to live clicks/keys*, real-time keyboard, or graphics/sprites
-— so a live-key graphical *"tetris"* is still out of reach. It won't refuse, though: it builds the
-closest version and tells you what it couldn't do. Those are the remaining Phase 6 items.
+It can't *yet* do **real-time continuous input** (held keys, mouse-move, animation frames) or
+graphics/sprites — so a live-action graphical *"tetris"* is still out of reach, but a **clickable,
+button-driven window is now in reach**. It won't refuse, though: it builds the closest version and
+tells you what it couldn't do. Those are the remaining Phase 6 items.
 
 ```text
 you> make me a tetris game
@@ -251,6 +260,9 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
   intercepts each imported API with a Python implementation (no Windows rootfs needed),
   and exposes the Plan §6 tools — `build_binary`, `validate_pe`, `disassemble`, `run`,
   `trace`, `inspect`, `crash_analysis`, `diff_behavior`, `list_imports`, `resolve_api`.
+  After `main` returns it **pumps window messages into the registered window proc**
+  (`WM_CREATE`/`WM_PAINT`/`WM_COMMAND`-per-button/`WM_DESTROY`), recording each handler's
+  effects — so click/paint behavior is observable and a faulting handler stays contained.
 - **Raw-bytes path** (`siryapsalot/raw.py`): the end goal — `build_from_obj` links model-emitted
   machine-code bytes + relocations into a PE; `build_raw_pe` accepts an entire `.exe` as bytes.
   Shares the trusted linker (`backend/layout.link`) with the IR path.
@@ -261,7 +273,8 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
 - **Model backends** (`siryapsalot/llm.py`): OpenAI/ChatGPT, Anthropic, or local Ollama —
   switchable at runtime; **personas** in `siryapsalot/modes.py` (Lil Yapper / Yapzilla).
 - **Web UI + self-update** (`siryapsalot/web.py`, `siryapsalot/updater.py`): a browser chat with
-  persona/model pickers, download buttons, and a git **Update** button (branch switching).
+  persona, **provider, and per-provider model** pickers (choose a provider → the model list
+  refreshes to its models), download buttons, and a git **Update** button (branch switching).
 - **Training** (`siryapsalot/reward.py`, `siryapsalot/dataset.py`, `siryapsalot/training/`): the
   dense reward ladder (the RLVR signal, scores IR and raw bytes), the data harvester, an
   `RLEnv`, and an SFT formatter — the Phase 4/5 scaffolding.
