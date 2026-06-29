@@ -34,7 +34,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 0 | Scope, repo, frozen IR schema | ✅ done |
 | 1 | Harness / MCP server (the judge) | ✅ core done (Unicorn emulator + all §6 tools + MCP) |
 | 2 | Deterministic backend (IR → .exe) | ✅ done (loops, branches, arithmetic, div/mul, stdin, file I/O, multi-procedure call/ret) |
-| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval; **OpenAI / Anthropic / local Ollama** + model switcher + self-update |
+| 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval (**benchmark any model in-GUI or via `eval --live`**); **OpenAI / Anthropic / local Ollama** + model switcher + self-update |
 | 4 | Training-data factory | 🟡 harvester emits verified (intent→IR), (intent→raw bytes), and repair-trajectory samples; SFT formatter |
 | 5 | Train: distill, then RLVR | 🟡 dense reward ladder (scores IR *and* raw bytes) + an `RLEnv` (harness-as-reward); training run gated on compute |
 | 6 | Harden & expand | 🟡 GUI (message boxes, **real windows, clickable buttons/controls, sound**, **live WM_COMMAND/WM_PAINT dispatch**), **persona switcher** (Lil Yapper / Yapzilla), positioned/colored console, a real game (Tic-Tac-Toe), and the **raw-bytes path**; angr verification still planned |
@@ -75,7 +75,7 @@ provider). At launch: `siryapsalot --backend openai --model gpt-4o`.
 
 ```bash
 siryapsalot            # terminal chat (no subcommand needed)
-siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 (provider+model pickers, Update button)
+siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 (provider+model pickers, 🧪 Eval, Update)
 ```
 
 ```text
@@ -158,6 +158,34 @@ bot> Real-time graphical Tetris is beyond the backend right now, so I built an A
 No API key? The exact same loop runs with any `fn(message, feedback, iter, history) -> spec`
 generator (see `examples/chat_demo.py`) — that's how the chatbot demo and every
 `examples/*.ir.json` were produced and verified here.
+
+## Benchmark a model — how good is it?
+
+Pick a provider + model, then hit the **🧪 Eval** button (next to the model dropdown in
+`siryapsalot serve`). It runs the **agent repair loop** for *that model* over a suite of
+oracle-verified tasks (hello, count, echo, factorial, fizzbuzz, sum, fibonacci, strlen, a
+guessing game) and streams a live scoreboard — per-task ✅/❌, how many repair iterations it
+needed, how many cases passed — ending in a **score** like `7/9 tasks (78%)`. The grading is
+objective: each task has an oracle, so a build only counts if it actually behaves correctly. It
+runs in a background thread, so the page stays responsive while it works.
+
+```text
+🧪 Eval — openai / gpt-4o
+  ✅ hello       · 1 iter 1/1 cases
+  ✅ count       · 1 iter 1/1 cases
+  ✅ factorial   · 2 iter 5/5 cases
+  ❌ guess       · 3 iter · failed@diff_behavior
+  …
+Score: 8/9 tasks (89%)
+```
+
+Same thing from the terminal — benchmark any model without the browser:
+
+```bash
+siryapsalot eval --live --backend openai --model gpt-4o   # score a specific model
+siryapsalot eval --live --task factorial --max-iters 5    # one task, more repair budget
+siryapsalot eval                                          # reference solutions (a harness self-check)
+```
 
 ## Running on Windows
 
@@ -274,7 +302,9 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
   switchable at runtime; **personas** in `siryapsalot/modes.py` (Lil Yapper / Yapzilla).
 - **Web UI + self-update** (`siryapsalot/web.py`, `siryapsalot/updater.py`): a browser chat with
   persona, **provider, and per-provider model** pickers (choose a provider → the model list
-  refreshes to its models), download buttons, and a git **Update** button (branch switching).
+  refreshes to its models), a **🧪 Eval** button that benchmarks the selected model on the
+  oracle task suite (background thread + live scoreboard), download buttons, and a git **Update**
+  button (branch switching).
 - **Training** (`siryapsalot/reward.py`, `siryapsalot/dataset.py`, `siryapsalot/training/`): the
   dense reward ladder (the RLVR signal, scores IR and raw bytes), the data harvester, an
   `RLEnv`, and an SFT formatter — the Phase 4/5 scaffolding.

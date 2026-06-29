@@ -152,6 +152,28 @@ and the success reply notes when an app "reacts to N live event(s) 🖱️". Dem
 dispatched. Still out of scope: real-time continuous input (held keys, mouse-move, animation) and
 graphics/sprites — so a live-action graphical "tetris" remains future work.
 
+## D12 — In-GUI model eval: benchmark a chosen provider/model on the oracle suite (Plan §7)
+The product can now answer "how good is *this* model at building binaries?" from the web UI. A
+**🧪 Eval** button (next to the model picker) runs the **agent repair loop** (`agent.solve`) for
+the selected provider/model over the Phase-3 task suite (`eval/tasks.py`) and scores each task
+against its **oracle** (`diff_behavior`) — an objective pass/fail, not a self-reported one.
+
+- **Background + live progress.** `ChatService.start_eval` spawns a daemon thread and returns at
+  once; the single-threaded `HTTPServer` stays responsive because the work is off the request
+  thread. The browser polls `GET /api/eval/status` (~1.5s) and renders a live scoreboard
+  (per-task ✅/❌, repair iterations, cases passed) ending in a `passed/total (score%)`. One eval
+  at a time — a second `start_eval` while running returns `{started:false, busy:true}`.
+- **Which model.** The eval uses an `LLMGenerator` bound to the requested provider/model
+  (`make_backend(prefer=...)` + `set_model`), so it tests exactly what the dropdowns select,
+  independent of later chat actions.
+- **Testable offline.** `start_eval(generator=...)` accepts an injected generator;
+  `agent.LibraryGenerator` (reference IR) drives the whole pipeline deterministically with no API
+  key, which is how the feature is unit-tested. Endpoints: `POST /api/eval`,
+  `GET /api/eval/status`, `GET /api/eval/tasks`.
+- **CLI parity.** `siryapsalot eval --live [--backend …] [--model …] [--task …] [--max-iters N]`
+  benchmarks a model from the terminal; plain `siryapsalot eval` still scores the reference
+  solutions as a harness self-check.
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:

@@ -53,8 +53,11 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("crash", help="analyze a crash")
     c.add_argument("exe"); c.add_argument("--stdin", default="")
 
-    e = sub.add_parser("eval", help="run the eval task suite (reference solutions)")
+    e = sub.add_parser("eval", help="run the eval task suite (reference solutions, or --live model)")
     e.add_argument("--task", help="run only this task")
+    e.add_argument("--live", action="store_true",
+                   help="benchmark the live model (set via --backend/--model) instead of reference IR")
+    e.add_argument("--max-iters", type=int, default=3, help="repair iterations per task in --live mode")
 
     s = sub.add_parser("solve", help="run the agent repair loop on a task")
     s.add_argument("task"); s.add_argument("--max-iters", type=int, default=5)
@@ -122,6 +125,31 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "eval":
         from .eval import TASKS, run_suite, library_get_ir
         tasks = [t for t in TASKS if t["name"] == args.task] if args.task else TASKS
+        if args.live:
+            from .agent import LLMGenerator, solve
+            from .llm import make_backend
+            try:
+                b = make_backend(prefer=args.backend)
+            except Exception as e:
+                print(e); return 1
+            if args.model:
+                b.set_model(args.model)
+            label = f"{b.name}/{getattr(b, 'model', '?')}"
+            print(f"benchmarking {label} on {len(tasks)} task(s) (max {args.max_iters} iters each)…")
+            gen = LLMGenerator(backend=b)
+            passed = 0
+            for t in tasks:
+                try:
+                    res = solve(t, gen, max_iters=args.max_iters)
+                    ok, iters = res["success"], res["iterations"]
+                except Exception as ex:
+                    ok, iters = False, args.max_iters
+                    print(f"  {t['name']:12} ERROR  {ex}")
+                    continue
+                passed += ok
+                print(f"  {t['name']:12} {'PASS' if ok else 'FAIL'}  ({iters} iter)")
+            print(f"SUITE: {passed}/{len(tasks)} tasks pass   [{label}]")
+            return 0 if passed == len(tasks) else 1
         summary = run_suite(library_get_ir, tasks)
         for r in summary["results"]:
             tag = "PASS" if r["passed"] else f"FAIL@{r['stage']}"

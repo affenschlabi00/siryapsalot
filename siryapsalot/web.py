@@ -5,11 +5,15 @@ you pick the persona (Lil Yapper / Yapzilla), the LLM provider (OpenAI / Anthrop
 — per provider — which model it uses, chat to build .exe files, and hit an Update button to pull
 the newest code from the public repo (and switch branches). Choosing a provider refreshes the
 model list to that provider's models (e.g. pick Ollama → its local models; pick OpenAI → gpt-*).
+A 🧪 Eval button benchmarks the *selected* model: it runs the agent repair loop over the
+oracle-verified task suite in a background thread and streams a live pass/fail scoreboard, so you
+can see how good a given model is at turning intent into a correct binary.
 """
 from __future__ import annotations
 
 import json
 import os
+import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -25,6 +29,9 @@ class ChatService:
                           out_dir=build_dir)
         self.bot = bot
         self.build_dir = build_dir
+        self._eval_lock = threading.Lock()
+        self._eval: dict = {"running": False, "done": 0, "total": 0, "results": [],
+                            "backend": None, "model": None, "summary": None, "error": None}
 
     def message(self, text: str, mode=None, model=None, backend=None) -> dict:
         if backend and backend != getattr(self.bot.backend, "name", None):
@@ -79,6 +86,102 @@ class ChatService:
         from . import updater
         return updater.update(branch)
 
+    # --- model eval: benchmark a provider/model on the oracle-verified task suite ---------
+    def eval_tasks(self) -> list[dict]:
+        """The benchmark suite (name + intent), so the UI can preview what will be tested."""
+        from .eval import TASKS
+        return [{"name": t["name"], "intent": t["intent"]} for t in TASKS]
+
+    def _select_tasks(self, names=None):
+        from .eval import TASKS
+        if not names:
+            return list(TASKS)
+        wanted = set(names)
+        return [t for t in TASKS if t["name"] in wanted]
+
+    def start_eval(self, max_iters: int = 3, backend=None, model=None,
+                   generator=None, task_names=None) -> dict:
+        """Kick off a benchmark of the chosen provider/model in a background thread.
+
+        Drives the agent repair loop (agent.solve) over each task and scores it against the
+        task's oracle — an objective "how good is this model at building binaries" number.
+        Returns immediately; poll eval_status() for live progress. Pass `generator` to test
+        without a live model (e.g. agent.LibraryGenerator -> reference solutions)."""
+        with self._eval_lock:
+            if self._eval.get("running"):
+                return {"started": False, "busy": True, **self._snapshot_locked()}
+            tasks = self._select_tasks(task_names)
+            if not tasks:
+                return {"started": False, "error": "no matching tasks"}
+            if generator is None:
+                try:
+                    from .agent import LLMGenerator
+                    from .llm import make_backend
+                    b = make_backend(prefer=backend) if backend else self.bot.backend
+                    if model:
+                        b.set_model(model)
+                    generator = LLMGenerator(backend=b)
+                    bname, mname = getattr(b, "name", "?"), getattr(b, "model", "?")
+                except Exception as e:
+                    return {"started": False, "error": str(e)}
+            else:
+                bname = getattr(generator, "name", backend or "reference")
+                mname = getattr(generator, "model", model or "reference")
+            self._eval = {"running": True, "done": 0, "total": len(tasks), "results": [],
+                          "backend": bname, "model": mname, "max_iters": max_iters,
+                          "summary": None, "error": None}
+        t = threading.Thread(target=self._run_eval, args=(generator, tasks, max_iters),
+                             daemon=True)
+        t.start()
+        with self._eval_lock:
+            return {"started": True, **self._snapshot_locked()}
+
+    def _run_eval(self, generator, tasks, max_iters):
+        from .agent import solve
+        for task in tasks:
+            try:
+                res = solve(task, generator, max_iters=max_iters, out_dir=self.build_dir)
+                entry = self._summarize_solve(res, task)
+            except Exception as e:                       # a generator/build blew up on this task
+                entry = {"task": task["name"], "intent": task["intent"], "passed": False,
+                         "iterations": max_iters, "cases": None, "stage": "exception",
+                         "error": str(e)}
+            with self._eval_lock:
+                self._eval["results"].append(entry)
+                self._eval["done"] += 1
+        with self._eval_lock:
+            results = self._eval["results"]
+            passed = sum(1 for r in results if r["passed"])
+            total = len(results)
+            self._eval["summary"] = {"passed": passed, "total": total,
+                                     "score": round(passed / total, 3) if total else 0.0}
+            self._eval["running"] = False
+
+    @staticmethod
+    def _summarize_solve(res: dict, task: dict) -> dict:
+        traj = res.get("trajectory") or []
+        last = traj[-1] if traj else {}
+        cases = None
+        for tc in last.get("tool_calls", []):
+            if tc.get("tool") == "diff_behavior":
+                cases = [tc.get("pass_count"), tc.get("total")]
+        stage = None
+        if not res.get("success") and last.get("tool_calls"):
+            stage = last["tool_calls"][-1].get("tool")
+        return {"task": task["name"], "intent": task["intent"],
+                "passed": bool(res.get("success")), "iterations": res.get("iterations"),
+                "cases": cases, "stage": stage}
+
+    def _snapshot_locked(self) -> dict:
+        e = self._eval
+        return {"running": e["running"], "done": e["done"], "total": e["total"],
+                "results": list(e["results"]), "backend": e["backend"], "model": e["model"],
+                "summary": e["summary"], "error": e.get("error")}
+
+    def eval_status(self) -> dict:
+        with self._eval_lock:
+            return self._snapshot_locked()
+
 
 INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <title>Sir Yaps-a-Lot — build binaries by chatting</title>
@@ -112,6 +215,7 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
  <select id="mode" title="who you're chatting with"></select>
  <select id="backend" title="LLM provider"></select>
  <select id="model" title="LLM model"></select>
+ <button class="bar" id="evalbtn" title="benchmark the selected model on the task suite">🧪 Eval</button>
  <span class="grow"></span>
  <select id="branch" title="git branch"></select>
  <button class="bar" id="upd" title="pull the newest version from git">⟳ Update</button>
@@ -125,7 +229,8 @@ const log=document.getElementById('log'),inp=document.getElementById('in'),f=doc
       send=document.getElementById('send'),modeSel=document.getElementById('mode'),
       backendSel=document.getElementById('backend'),
       modelSel=document.getElementById('model'),branchSel=document.getElementById('branch'),
-      upd=document.getElementById('upd'),ver=document.getElementById('ver');
+      upd=document.getElementById('upd'),ver=document.getElementById('ver'),
+      evalbtn=document.getElementById('evalbtn');
 function fill(sel,items,cur){sel.innerHTML='';items.forEach(it=>{const o=document.createElement('option');
   o.value=it.value;o.textContent=it.label;if(it.value===cur)o.selected=true;sel.appendChild(o);});}
 function add(cls,txt,dl){const d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;
@@ -155,6 +260,32 @@ f.onsubmit=async e=>{e.preventDefault();const m=inp.value.trim();if(!m)return;
     const j=await r.json();t.remove();add('bot',(j.persona?j.persona+': ':'')+j.reply,j.download);}
   catch(err){t.remove();add('bot','Error: '+err);}
   send.disabled=false;inp.focus();};
+evalbtn.onclick=async()=>{evalbtn.disabled=true;
+  const card=document.createElement('div');card.className='msg bot';log.appendChild(card);
+  card.textContent='🧪 starting eval…';log.scrollTop=log.scrollHeight;
+  function render(s){const head='🧪 Eval — '+(s.backend||'?')+' / '+(s.model||'?');
+    const rows=(s.results||[]).map(r=>{const mark=r.passed?'✅':'❌';
+      const cas=r.cases?(' '+r.cases[0]+'/'+r.cases[1]+' cases'):'';
+      const it=(r.iterations!=null)?(' · '+r.iterations+' iter'):'';
+      const why=(!r.passed&&r.stage)?(' · failed@'+r.stage):'';
+      return '  '+mark+' '+(r.task||'').padEnd(11)+it+cas+why;});
+    let foot='';
+    if(s.running)foot='  …running ('+s.done+'/'+s.total+')';
+    else if(s.summary)foot='Score: '+s.summary.passed+'/'+s.summary.total+
+      ' tasks ('+Math.round(s.summary.score*100)+'%)';
+    card.textContent=[head].concat(rows).concat(foot?[foot]:[]).join('\n');
+    log.scrollTop=log.scrollHeight;}
+  let start;
+  try{start=await (await fetch('/api/eval',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({backend:backendSel.value,model:modelSel.value,max_iters:3})})).json();}
+  catch(err){card.textContent='eval error: '+err;evalbtn.disabled=false;return;}
+  if(start.started===false){card.textContent='⚠️ '+(start.busy?'an eval is already running':
+      ('could not start eval: '+(start.error||'')));evalbtn.disabled=false;return;}
+  async function poll(){let s;
+    try{s=await (await fetch('/api/eval/status')).json();}
+    catch(err){evalbtn.disabled=false;return;}
+    render(s);if(s.running)setTimeout(poll,1500);else evalbtn.disabled=false;}
+  poll();};
 upd.onclick=async()=>{upd.disabled=true;add('sys','updating…');
   try{const j=await (await fetch('/api/update',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({branch:branchSel.value})})).json();
@@ -194,6 +325,10 @@ def make_handler(service: ChatService):
                 except Exception as e:
                     self._json({"backend": "?", "model": "?", "models": [], "modes": [],
                                 "available": False, "error": str(e)})
+            elif self.path == "/api/eval/status":
+                self._json(service.eval_status())
+            elif self.path == "/api/eval/tasks":
+                self._json({"tasks": service.eval_tasks()})
             elif self.path.startswith("/download/"):
                 name = os.path.basename(urllib.parse.unquote(self.path[len("/download/"):]))
                 fp = os.path.join(service.build_dir, name)
@@ -225,6 +360,14 @@ def make_handler(service: ChatService):
                     self._json(service.set_backend(body.get("backend")))
                 except Exception as e:
                     self._json({"ok": False, "error": str(e)})
+            elif self.path == "/api/eval":
+                try:
+                    self._json(service.start_eval(max_iters=int(body.get("max_iters", 3)),
+                                                  backend=body.get("backend"),
+                                                  model=body.get("model"),
+                                                  task_names=body.get("tasks")))
+                except Exception as e:
+                    self._json({"started": False, "error": str(e)})
             elif self.path == "/api/update":
                 try:
                     self._json(service.update(body.get("branch")))
