@@ -23,6 +23,9 @@ def _spec(name, explanation, tests):
 def claude_model(message, feedback, iteration, history):
     """Stand-in for the live model: message -> {program_name, explanation, ir, self_tests}."""
     m = message.lower()
+    if "deluxe" in m or "button" in m or "sound" in m or "beep" in m:
+        return _spec("gui_deluxe", "a real window with a button — and it beeps!",
+                     [{"stdin": "", "expect_control_contains": "Click me!", "expect_sound": True}])
     if "christmas" in m or "tree" in m:
         return _spec("christmas_tree", "prints a centered ASCII christmas tree",
                      [{"stdin": "", "expect_contains": "***********"}])
@@ -51,29 +54,41 @@ def claude_model(message, feedback, iteration, history):
     if "guess" in m:
         return _spec("guess", "a number-guessing game (target 42) — type guesses, get hints",
                      [{"stdin": "50\n40\n42\n", "expect_contains": "correct!"}])
+    if "deluxe" in m or "button" in m or "sound" in m:
+        return _spec("gui_deluxe", "a real window with a button — and it beeps!",
+                     [{"stdin": "", "expect_control_contains": "Click me!", "expect_sound": True}])
     if "fib" in m:
         return _spec("fibonacci", "prints the Fibonacci numbers below 100",
                      [{"stdin": "", "expect_contains": "89"}])
     raise ValueError(f"(demo stand-in has no canned IR for {message!r})")
 
 
+class StandIn:
+    """Stand-in generator with a switchable .mode (like the real ChatbotGenerator)."""
+    def __init__(self):
+        from siryapsalot import modes
+        self.mode = modes.MODES["classic"]
+
+    def __call__(self, message, feedback, iteration, history):
+        return claude_model(message, feedback, iteration, history)
+
+
 def main():
-    bot = Chatbot(claude_model)
-    conversation = [
-        "make me a christmas tree",
-        "pop up a message box that says hello",
-        "open a window titled hello",
-        "draw me a box with a label",
-        "make me a tic-tac-toe game",
-        "make me a tetris game",
-        "now write something that tells me whether a number is prime",
-        "make me a guessing game",
-    ]
-    for msg in conversation:
-        print("\n" + "=" * 72)
-        print(f"you> {msg}\n")
-        res = bot.send(msg)
-        print("bot> " + res["reply"])
+    bot = Chatbot(StandIn())
+    print(f"💬 chatting with {bot.mode.name}\n")
+    for msg in ["make me a christmas tree", "make me a tic-tac-toe game",
+                "now tell me whether a number is prime"]:
+        print("=" * 72 + f"\nyou> {msg}\n")
+        print(f"{bot.mode.name}> " + bot.send(msg)["reply"])
+
+    print("\n" + "#" * 72)
+    print(f"#  /switch yapzilla   →  now chatting with the deluxe persona")
+    print("#" * 72)
+    bot.switch("yapzilla")
+    print(f"\n💬 chatting with {bot.mode.name} — {bot.mode.tagline}\n")
+    for msg in ["build me a deluxe window with a button and sound"]:
+        print("=" * 72 + f"\nyou> {msg}\n")
+        print(f"{bot.mode.name}> " + bot.send(msg)["reply"])
 
 
 if __name__ == "__main__":

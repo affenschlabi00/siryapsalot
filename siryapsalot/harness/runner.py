@@ -29,6 +29,8 @@ def run(path: str, stdin: str | bytes = b"", args: list | None = None,
         "files": {k: _decode(v) for k, v in res["vfs"].items()},
         "dialogs": res["dialogs"],
         "windows": res["windows"],
+        "controls": res["controls"],
+        "sounds": res["sounds"],
         "screen": res["screen"],
     }
 

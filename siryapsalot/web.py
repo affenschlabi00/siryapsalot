@@ -15,18 +15,21 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 class ChatService:
     """The testable core: a message in, a reply + (optional) downloadable binary out."""
 
-    def __init__(self, bot=None, build_dir: str = "build"):
+    def __init__(self, bot=None, build_dir: str = "build", mode=None):
         if bot is None:
             from .chatbot import Chatbot, ChatbotGenerator
-            bot = Chatbot(ChatbotGenerator(), out_dir=build_dir)
+            bot = Chatbot(ChatbotGenerator(mode=mode), out_dir=build_dir)
         self.bot = bot
         self.build_dir = build_dir
 
-    def message(self, text: str) -> dict:
+    def message(self, text: str, mode=None) -> dict:
+        if mode:
+            self.bot.switch(mode)
         res = self.bot.send(text)
         download = (os.path.basename(res["path"])
                     if res.get("success") and res.get("path") else None)
-        return {"reply": res["reply"], "success": res["success"],
+        persona = self.bot.mode.name if self.bot.mode else "Sir Yaps-a-Lot"
+        return {"reply": res["reply"], "success": res["success"], "persona": persona,
                 "download": download, "iterations": res.get("iterations")}
 
 
@@ -52,8 +55,15 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
    color:var(--txt);font-size:15px} #send{padding:12px 22px;border:0;border-radius:10px;
    background:var(--me);color:#fff;font-size:15px;cursor:pointer} #send:disabled{opacity:.5}
  .hint{color:var(--mut);font-size:13px}
+ header{display:flex;align-items:center;gap:12px}
+ #mode{margin-left:auto;background:#0d1117;color:var(--txt);border:1px solid #30363d;
+   border-radius:8px;padding:8px 10px;font-size:14px}
 </style></head><body>
-<header><b>Sir Yaps-a-Lot</b><span>tell me what to build — I'll make you a Windows .exe</span></header>
+<header><b>Sir Yaps-a-Lot</b><span>pick who builds your .exe →</span>
+ <select id="mode" title="who you're chatting with">
+   <option value="classic">🙂 Lil Yapper — simple</option>
+   <option value="deluxe">😈 Yapzilla — full GUI + sound</option>
+ </select></header>
 <div id="log"><div class="msg bot">Hi! Tell me what program you want and I'll build it.
 Try: "make me a tic-tac-toe game", "a program that prints the primes under 50", or
 "pop up a message box that says hello".</div></div>
@@ -68,9 +78,10 @@ function add(cls,txt,dl){const d=document.createElement('div');d.className='msg 
 f.onsubmit=async e=>{e.preventDefault();const m=inp.value.trim();if(!m)return;
   add('me',m);inp.value='';send.disabled=true;
   const t=document.createElement('div');t.className='msg bot';t.textContent='building…';log.appendChild(t);
+  const mode=document.getElementById('mode').value;
   try{const r=await fetch('/api/build',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:m})});const j=await r.json();t.remove();
-    add('bot',j.reply,j.download);}catch(err){t.remove();add('bot','Error: '+err);}
+      body:JSON.stringify({message:m,mode:mode})});const j=await r.json();t.remove();
+    add('bot',(j.persona?j.persona+': ':'')+j.reply,j.download);}catch(err){t.remove();add('bot','Error: '+err);}
   send.disabled=false;inp.focus();};
 </script></body></html>"""
 
@@ -111,12 +122,13 @@ def make_handler(service: ChatService):
                 return
             n = int(self.headers.get("Content-Length", 0))
             try:
-                msg = json.loads(self.rfile.read(n))["message"]
+                body = json.loads(self.rfile.read(n))
+                msg = body["message"]
             except Exception:
                 self._send(400, "application/json", b'{"error":"bad request"}')
                 return
             try:
-                out = service.message(msg)
+                out = service.message(msg, mode=body.get("mode"))
             except Exception as e:  # never let one bad build kill the server
                 out = {"reply": f"Sorry, that failed: {e}", "success": False, "download": None}
             self._send(200, "application/json", json.dumps(out).encode())
@@ -124,8 +136,8 @@ def make_handler(service: ChatService):
     return Handler
 
 
-def serve(port: int = 8765, host: str = "127.0.0.1", bot=None):
-    service = ChatService(bot=bot)
+def serve(port: int = 8765, host: str = "127.0.0.1", bot=None, mode=None):
+    service = ChatService(bot=bot, mode=mode)
     httpd = HTTPServer((host, port), make_handler(service))
     print(f"siryapsalot chat UI → http://{host}:{port}   (Ctrl-C to stop)")
     try:

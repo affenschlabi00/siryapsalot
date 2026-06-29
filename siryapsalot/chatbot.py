@@ -43,6 +43,13 @@ def _check(test: dict, run: dict) -> tuple[bool, str]:
         titles = " | ".join(str(w.get("title", "")) for w in run.get("windows", []))
         if test["expect_window_contains"] not in titles:
             return False, f"no window titled like {test['expect_window_contains']!r} (saw: {titles!r})"
+    if test.get("expect_control_contains"):
+        labels = " | ".join(f"{c.get('class')}:{c.get('text')}" for c in run.get("controls", []))
+        if test["expect_control_contains"] not in labels:
+            return False, f"no control labelled {test['expect_control_contains']!r} (saw: {labels!r})"
+    if test.get("expect_sound"):
+        if not run.get("sounds"):
+            return False, "the program did not play any sound (expected a Beep/MessageBeep/PlaySound)"
     return True, ""
 
 
@@ -60,6 +67,19 @@ class Chatbot:
         self.out_dir = out_dir
         self.builder = builder or harness.build_binary
         self.history: list[dict] = []
+
+    @property
+    def mode(self):
+        """The persona currently chatting (a modes.Mode), if the generator has one."""
+        return getattr(self.generator, "mode", None)
+
+    def switch(self, mode_id):
+        """Switch which persona you're chatting with (e.g. 'yapzilla'). Returns the new Mode."""
+        from . import modes
+        m = modes.get_mode(mode_id)
+        if m is not None and hasattr(self.generator, "mode"):
+            self.generator.mode = m
+        return m
 
     def send(self, message: str, verbose: bool = False) -> dict:
         os.makedirs(self.out_dir, exist_ok=True)
@@ -142,6 +162,16 @@ class Chatbot:
         elif run.get("dialogs"):
             d = run["dialogs"][0]
             lines.append(f"\nIt pops up a message box — [{d['caption']}] {d['text']!r}")
+
+        extras = []
+        if run.get("controls"):
+            labels = ", ".join(f"[{c.get('text') or c.get('class')}]" for c in run["controls"][:6])
+            extras.append(f"controls: {labels}")
+        if run.get("sounds"):
+            extras.append(f"plays {len(run['sounds'])} sound(s) 🔊")
+        if extras:
+            lines.append("    (" + "; ".join(extras) + ")")
+
         lines.append(f"\nIt passed {len(runs)} self-test(s). The binary is at build/{name}.exe.")
         return "\n".join(lines)
 
@@ -153,12 +183,14 @@ class ChatbotGenerator:
     ANTHROPIC_API_KEY is set, otherwise a running/ configured Ollama model. No key required.
     """
 
-    def __init__(self, backend=None, model: str | None = None):
+    def __init__(self, backend=None, model: str | None = None, mode=None):
+        from . import modes
         from .agent import generators, prompt
         from .llm import make_backend
         self._gen = generators
         self._prompt = prompt
         self.backend = backend or make_backend()
+        self.mode = (modes.get_mode(mode) or modes.MODES[modes.DEFAULT])
 
     def __call__(self, message, feedback, iteration, history):
         msgs = []
@@ -168,7 +200,7 @@ class ChatbotGenerator:
                          "content": f"(built {turn['program_name']}: {turn['explanation']})"})
         user = message if not feedback else f"{message}\n\n[automatic feedback]\n{feedback}"
         msgs.append({"role": "user", "content": user})
-        text = self.backend.chat(self._prompt.chatbot_system_prompt(), msgs)
+        text = self.backend.chat(self._prompt.chatbot_system_prompt(self.mode), msgs)
         return self._gen.extract_json(text)
 
 

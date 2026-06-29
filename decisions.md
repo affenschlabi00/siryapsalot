@@ -93,6 +93,19 @@ the emitted `.exe` is a genuine Win32 GUI program that shows a window on real Wi
 emulated yet: interactive control/click handling, real-time input, graphics, sound. The chatbot
 self-tests GUI programs with `expect_dialog_contains` / `expect_window_contains`.
 
+## D9 — Switchable personas (Lil Yapper / Yapzilla) + sound & controls
+The chatbot has two switchable personas (`siryapsalot/modes.py`) — like a model switcher, but for
+the builder's vibe and capability surface, not the LLM:
+- **Lil Yapper** (classic): humble, console apps + basic windows/dialogs; sound APIs are *not*
+  advertised in its prompt.
+- **Yapzilla** (deluxe): goes big — advertises child **controls** (buttons via `CreateWindowExA`
+  with class `BUTTON` + a parent HWND) and **sound** (`Beep`, `MessageBeep`, `PlaySoundA`).
+Both run the same harness; the mode only changes the persona text and which APIs the prompt
+offers. Switch via `-m/--mode`, the terminal `/switch`, or the web UI dropdown. The harness records
+controls and sounds (they execute in `main`, so they really run under emulation; on Windows they
+show/play). Self-tests gain `expect_control_contains` and `expect_sound`. Controls/keys reacting to
+*live* clicks remain out of scope (no WM dispatch).
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:

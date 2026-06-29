@@ -55,18 +55,23 @@ Useful patterns:
 """
 
 
-def available_apis() -> str:
+DELUXE_ONLY = {"Beep", "MessageBeep", "PlaySoundA"}   # advertised only in Yapzilla mode
+
+
+def available_apis(include_deluxe: bool = True) -> str:
     lines = []
     for name, sig in apidb.SIGNATURES.items():
+        if not include_deluxe and name in DELUXE_ONLY:
+            continue
         lines.append(f"- {name} ({sig['dll']}): {sig['signature']} ; args in {sig['arg_registers']}")
     return "\n".join(lines)
 
 
-def system_prompt() -> str:
+def system_prompt(include_deluxe: bool = True) -> str:
     return (
         RULES
         + "\n\nAPIs the harness implements (you may only import these):\n"
-        + available_apis()
+        + available_apis(include_deluxe)
         + "\n\nIR JSON schema:\n"
         + json.dumps(_schema())
         + "\n\nExample 1 — print a string:\n" + _example("hello.ir.json")
@@ -99,7 +104,9 @@ representative inputs yourself. Each self_test may use any of:
   "expect_screen_contains" a substring of the rendered console screen (for programs that draw
                            with SetConsoleCursorPosition / FillConsoleOutputCharacterA),
   "expect_dialog_contains" text shown in a MessageBox,
-  "expect_window_contains" the title of a window the program opens (windowed GUI apps).
+  "expect_window_contains" the title of a window the program opens (windowed GUI apps),
+  "expect_control_contains" the label of a child control (e.g. a button),
+  "expect_sound"           true, if the program should play a sound (Beep/MessageBeep/PlaySound).
 
 CAPABILITY & SCOPE — read carefully. You CAN build:
 - console (text) programs: console + file I/O, arithmetic, loops, branches;
@@ -109,15 +116,27 @@ CAPABILITY & SCOPE — read carefully. You CAN build:
 - GUI dialogs (user32 MessageBoxA) AND real windows (GetModuleHandleA + RegisterClassExA +
   CreateWindowExA + ShowWindow + a GetMessageA message loop; set metadata.subsystem = "gui").
   Take a function pointer to your window proc with `code:WndProc`.
-You CANNOT (yet): window controls/buttons that react to clicks, real-time keyboard, graphics or
-sprites, or sound — so a live-key graphical "Tetris" is still out of reach.
+Some advanced features (child controls, sound) depend on YOUR MODE — see the persona note above.
+You CANNOT (yet): controls/keys that react to live clicks or keypresses, graphics/sprites — so a
+live-key graphical "Tetris" is still out of reach.
 - NEVER refuse. If a request needs something you lack, build the closest version that captures
   the spirit (a turn-based or positioned-text rendering) and SAY SO in "explanation". Ship it.
 """
 
+_CLASSIC_NOTE = ("YOUR MODE: Lil Yapper — keep it simple. Build console apps, text games, basic "
+                 "windows and message boxes. Do NOT use sound APIs.")
+_DELUXE_NOTE = ("YOUR MODE: Yapzilla — GO BIG. In addition to plain windows you can add child "
+                "CONTROLS (e.g. a button: CreateWindowExA with className \"BUTTON\", a window "
+                "style including WS_CHILD|WS_VISIBLE, and the parent window as hWndParent) and "
+                "SOUND (Beep(freq,ms), MessageBeep(type), PlaySoundA). Use them to make richer GUIs "
+                "with buttons and audio whenever it fits the request.")
 
-def chatbot_system_prompt() -> str:
-    return CHATBOT_ROLE + "\n\n" + system_prompt()
+
+def chatbot_system_prompt(mode=None) -> str:
+    from .. import modes
+    m = modes.get_mode(mode) or modes.MODES[modes.DEFAULT]
+    persona = f"PERSONA: {m.persona}\n\n{_DELUXE_NOTE if m.deluxe else _CLASSIC_NOTE}\n\n"
+    return persona + CHATBOT_ROLE + "\n\n" + system_prompt(include_deluxe=m.deluxe)
 
 
 def user_prompt(intent: str, feedback: str | None = None, cases=None) -> str:

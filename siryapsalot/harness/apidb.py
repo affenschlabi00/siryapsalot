@@ -141,6 +141,16 @@ SIGNATURES: dict[str, dict] = {
                     "arg_registers": ["rcx", "rdx"], "returns": "rax (HCURSOR)"},
     "LoadIconA": {"dll": "user32.dll", "signature": "HICON LoadIconA(HINSTANCE, LPCSTR)",
                   "arg_registers": ["rcx", "rdx"], "returns": "rax (HICON)"},
+    "SetWindowTextA": {"dll": "user32.dll", "signature": "BOOL SetWindowTextA(HWND, LPCSTR)",
+                       "arg_registers": ["rcx", "rdx"], "returns": "rax (BOOL)"},
+    # --- audio (Yapzilla mode): these actually play sound on Windows ---
+    "Beep": {"dll": "kernel32.dll", "signature": "BOOL Beep(DWORD dwFreq, DWORD dwDuration)",
+             "arg_registers": ["rcx", "rdx"], "returns": "rax (BOOL)"},
+    "MessageBeep": {"dll": "user32.dll", "signature": "BOOL MessageBeep(UINT uType)",
+                    "arg_registers": ["rcx"], "returns": "rax (BOOL)"},
+    "PlaySoundA": {"dll": "winmm.dll",
+                   "signature": "BOOL PlaySoundA(LPCSTR pszSound, HMODULE hmod, DWORD fdwSound)",
+                   "arg_registers": ["rcx", "rdx", "r8"], "returns": "rax (BOOL)"},
 }
 
 
@@ -287,15 +297,59 @@ def _RegisterClassExA(ctx):
     return 1  # a nonzero class atom
 
 
+_CONTROL_CLASSES = {"button", "edit", "static", "listbox", "combobox", "scrollbar",
+                    "richedit", "richedit20a", "richedit20w", "syslink"}
+
+
+def _cstr_or_empty(ctx, ptr):
+    """Read a C string, but treat small values as atoms/ids (not pointers) to avoid faulting."""
+    if ptr is None or ptr < 0x10000:
+        return ""
+    try:
+        return ctx.read_cstr(ptr).decode("latin-1")
+    except Exception:
+        return ""
+
+
 def _CreateWindowExA(ctx):
-    title = ctx.read_cstr(ctx.arg(3)).decode("latin-1")
+    cls = _cstr_or_empty(ctx, ctx.arg(2))
+    text = _cstr_or_empty(ctx, ctx.arg(3))
+    parent = ctx.arg(9)
 
     def dim(v):
         v &= 0xFFFFFFFF
         return "default" if v == 0x80000000 else v   # CW_USEDEFAULT
 
-    ctx.windows.append({"title": title, "width": dim(ctx.arg(7)), "height": dim(ctx.arg(8))})
+    if cls.lower() in _CONTROL_CLASSES or parent:
+        ctx.controls.append({"class": cls or "control", "text": text})
+        return 0x00020000 + len(ctx.controls) * 4
+    ctx.windows.append({"title": text, "class": cls, "width": dim(ctx.arg(7)),
+                        "height": dim(ctx.arg(8))})
     return 0x00010000 + len(ctx.windows) * 4          # a fake but nonzero HWND
+
+
+def _SetWindowTextA(ctx):
+    if ctx.controls:
+        ctx.controls[-1]["text"] = _cstr_or_empty(ctx, ctx.arg(2))
+    elif ctx.windows:
+        ctx.windows[-1]["title"] = _cstr_or_empty(ctx, ctx.arg(2))
+    return 1
+
+
+def _Beep(ctx):
+    ctx.sounds.append({"type": "beep", "freq": ctx.arg(1) & 0xFFFFFFFF,
+                       "duration_ms": ctx.arg(2) & 0xFFFFFFFF})
+    return 1
+
+
+def _MessageBeep(ctx):
+    ctx.sounds.append({"type": "messagebeep", "sound": ctx.arg(1) & 0xFFFFFFFF})
+    return 1
+
+
+def _PlaySoundA(ctx):
+    ctx.sounds.append({"type": "playsound", "name": _cstr_or_empty(ctx, ctx.arg(1))})
+    return 1
 
 
 def _GetMessageA(ctx):
@@ -339,4 +393,8 @@ IMPLS = {
     "PostQuitMessage": _zero,
     "LoadCursorA": _one,
     "LoadIconA": _one,
+    "SetWindowTextA": _SetWindowTextA,
+    "Beep": _Beep,
+    "MessageBeep": _MessageBeep,
+    "PlaySoundA": _PlaySoundA,
 }

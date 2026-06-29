@@ -118,7 +118,9 @@ class EmuContext:
         self.vfs: dict[str, bytearray] = {}
         self.handles: dict[int, tuple[str, str]] = {}
         self.dialogs: list[dict] = []          # MessageBox calls (GUI)
-        self.windows: list[dict] = []          # CreateWindowEx calls (GUI)
+        self.windows: list[dict] = []          # top-level CreateWindowEx calls (GUI)
+        self.controls: list[dict] = []         # child controls: buttons, edits, … (GUI)
+        self.sounds: list[dict] = []           # Beep / MessageBeep / PlaySound (audio)
         self.console = VirtualConsole()         # screen buffer for positioned drawing
         self.image_base = emu.image_base
         self._next_handle = 0x100
@@ -349,6 +351,8 @@ class Emulator:
         state["vfs"] = {k: bytes(v) for k, v in self.ctx.vfs.items()}
         state["dialogs"] = list(self.ctx.dialogs)
         state["windows"] = list(self.ctx.windows)
+        state["controls"] = list(self.ctx.controls)
+        state["sounds"] = list(self.ctx.sounds)
         state["screen"] = self.ctx.console.render()
         return state
 

@@ -1,0 +1,628 @@
+{
+  "metadata": {
+    "name": "gui_deluxe",
+    "subsystem": "gui",
+    "entry": "main",
+    "description": "Yapzilla: a real window with a button, and it beeps."
+  },
+  "imports": [
+    {
+      "dll": "kernel32.dll",
+      "function": "GetModuleHandleA"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "Beep"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "RegisterClassExA"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "CreateWindowExA"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "ShowWindow"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "UpdateWindow"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "GetMessageA"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "TranslateMessage"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "DispatchMessageA"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "DefWindowProcA"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "PostQuitMessage"
+    },
+    {
+      "dll": "user32.dll",
+      "function": "LoadCursorA"
+    }
+  ],
+  "data": [
+    {
+      "label": "classname",
+      "type": "bytes",
+      "value": "YapzillaWindow\u0000"
+    },
+    {
+      "label": "title",
+      "type": "bytes",
+      "value": "Yapzilla Deluxe!\u0000"
+    },
+    {
+      "label": "btnclass",
+      "type": "bytes",
+      "value": "BUTTON\u0000"
+    },
+    {
+      "label": "btntext",
+      "type": "bytes",
+      "value": "Click me!\u0000"
+    },
+    {
+      "label": "wc",
+      "type": "zeros",
+      "size": 80
+    },
+    {
+      "label": "msg",
+      "type": "zeros",
+      "size": 48
+    }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        {
+          "op": "xor",
+          "args": [
+            "ecx",
+            "ecx"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetModuleHandleA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v0",
+            "rax"
+          ],
+          "comment": "hInstance"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:wc"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "dword ptr [r10]",
+            "80"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "dword ptr [r10+4]",
+            "3"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "code:WndProc"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "[r10+8]",
+            "rax"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "[r10+24]",
+            "%v0"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "ecx",
+            "ecx"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "32512"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!LoadCursorA"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r10",
+            "data:wc"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "[r10+40]",
+            "rax"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [r10+48]",
+            "6"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:classname"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "[r10+64]",
+            "rax"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rcx",
+            "data:wc"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!RegisterClassExA"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "ecx",
+            "ecx"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:classname"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r8",
+            "data:title"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9d",
+            "0xCF0000"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "dword ptr [rsp+0x20]",
+            "0x80000000"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "dword ptr [rsp+0x28]",
+            "0x80000000"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x30]",
+            "420"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x38]",
+            "260"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x40]",
+            "0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x48]",
+            "0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "[rsp+0x50]",
+            "%v0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x58]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!CreateWindowExA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "%v1",
+            "rax"
+          ],
+          "comment": "main hwnd"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "%v1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "10"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!ShowWindow"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "%v1"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!UpdateWindow"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "ecx",
+            "ecx"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:btnclass"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r8",
+            "data:btntext"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9d",
+            "0x50000000"
+          ],
+          "comment": "WS_CHILD|WS_VISIBLE"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "dword ptr [rsp+0x20]",
+            "40"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "dword ptr [rsp+0x28]",
+            "40"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x30]",
+            "160"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x38]",
+            "40"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "[rsp+0x40]",
+            "%v1"
+          ],
+          "comment": "parent = main window"
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x48]",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "[rsp+0x50]",
+            "%v0"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+0x58]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!CreateWindowExA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "750"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "300"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!Beep"
+          ]
+        },
+        {
+          "label": "msgloop"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rcx",
+            "data:msg"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "edx",
+            "edx"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "r8d",
+            "r8d"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "r9d",
+            "r9d"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!GetMessageA"
+          ]
+        },
+        {
+          "op": "test",
+          "args": [
+            "eax",
+            "eax"
+          ]
+        },
+        {
+          "op": "jz",
+          "args": [
+            "endloop"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rcx",
+            "data:msg"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!TranslateMessage"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rcx",
+            "data:msg"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!DispatchMessageA"
+          ]
+        },
+        {
+          "op": "jmp",
+          "args": [
+            "msgloop"
+          ]
+        },
+        {
+          "label": "endloop"
+        },
+        {
+          "op": "xor",
+          "args": [
+            "ecx",
+            "ecx"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ExitProcess"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "WndProc",
+      "instructions": [
+        {
+          "op": "cmp",
+          "args": [
+            "edx",
+            "2"
+          ]
+        },
+        {
+          "op": "jne",
+          "args": [
+            "wp_def"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!PostQuitMessage"
+          ]
+        },
+        {
+          "op": "xor",
+          "args": [
+            "eax",
+            "eax"
+          ]
+        },
+        {
+          "op": "ret",
+          "args": []
+        },
+        {
+          "label": "wp_def"
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!DefWindowProcA"
+          ]
+        },
+        {
+          "op": "ret",
+          "args": []
+        }
+      ]
+    }
+  ]
+}

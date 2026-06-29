@@ -21,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="siryapsalot",
         description="A chatbot that builds Windows binaries. Just run `siryapsalot` and chat.")
+    p.add_argument("-m", "--mode", default=None,
+                   help="who to chat with: 'lil yapper' (classic) or 'yapzilla' (deluxe GUI+sound)")
     sub = p.add_subparsers(dest="cmd")   # no subcommand -> chat
 
     b = sub.add_parser("build", help="compile IR JSON to a .exe")
@@ -71,11 +73,11 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     if args.cmd is None or args.cmd == "chat":
-        return _chat()
+        return _chat(args.mode)
     if args.cmd == "serve":
         from .web import serve
         try:
-            serve(port=args.port)
+            serve(port=args.port, mode=args.mode)
         except Exception as e:
             from .llm import LLMUnavailable
             if isinstance(e, LLMUnavailable):
@@ -146,26 +148,49 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-def _chat() -> int:
+def _chat(mode=None) -> int:
+    from . import modes
     from .chatbot import Chatbot, ChatbotGenerator
     try:
-        gen = ChatbotGenerator()
+        gen = ChatbotGenerator(mode=mode)
     except Exception as e:
         print(e)                      # LLMUnavailable carries a friendly how-to message
         return 1
     bot = Chatbot(gen)
     b = gen.backend
-    print(f"Sir Yaps-a-Lot — using {b.name} ({getattr(b, 'model', '?')}).")
-    print("Tell me what to build and I'll make you a .exe. (Ctrl-D to quit)")
+
+    def banner():
+        m = bot.mode
+        print(f"\n💬 You're chatting with **{m.name}** — {m.tagline}")
+        print(f"   (model backend: {b.name} / {getattr(b, 'model', '?')})")
+
+    print("Sir Yaps-a-Lot. Tell me what to build and I'll make you a .exe.")
+    print("Commands:  /who (list personas)   /switch <name>   /help   Ctrl-D quits")
+    banner()
     while True:
         try:
-            msg = input("\nyou> ").strip()
+            msg = input(f"\nyou ▶ ").strip()
         except EOFError:
             print("\nbye!"); return 0
         if not msg:
             continue
+        if msg in ("/help", "/?"):
+            print("  /who — list who you can chat with;  /switch <name> — change persona")
+            continue
+        if msg == "/who":
+            print("Personas:\n" + modes.listing() +
+                  f"\n(currently: {bot.mode.name})")
+            continue
+        if msg.startswith("/switch"):
+            target = msg[len("/switch"):].strip()
+            m = bot.switch(target)
+            if m is None:
+                print(f"  unknown persona {target!r}. Try one of:\n" + modes.listing())
+            else:
+                banner()
+            continue
         res = bot.send(msg)
-        print("\nbot> " + res["reply"])
+        print(f"\n{bot.mode.name} ▶ " + res["reply"])
 
 
 if __name__ == "__main__":
