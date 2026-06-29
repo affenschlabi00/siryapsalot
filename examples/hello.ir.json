@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "name": "hello",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Prints 'Hello, world!' to the console via kernel32 and exits 0."
+  },
+  "imports": [
+    { "dll": "kernel32.dll", "function": "GetStdHandle" },
+    { "dll": "kernel32.dll", "function": "WriteFile" },
+    { "dll": "kernel32.dll", "function": "ExitProcess" }
+  ],
+  "data": [
+    { "label": "msg", "type": "bytes", "value": "Hello, world!\n" },
+    { "label": "written", "type": "u32", "value": 0 }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "comment": "Backend inserts prologue/epilogue (shadow space + alignment). Model never touches rsp/push/pop.",
+      "instructions": [
+        { "op": "mov",  "args": ["ecx", "-11"], "comment": "STD_OUTPUT_HANDLE" },
+        { "op": "call", "args": ["import:kernel32.dll!GetStdHandle"] },
+        { "op": "mov",  "args": ["%v0", "rax"], "comment": "save handle in a virtual register (callee-saved)" },
+        { "op": "mov",  "args": ["rcx", "%v0"], "comment": "hFile" },
+        { "op": "lea",  "args": ["rdx", "data:msg"], "comment": "lpBuffer" },
+        { "op": "mov",  "args": ["r8d", "14"], "comment": "nNumberOfBytesToWrite" },
+        { "op": "lea",  "args": ["r9", "data:written"], "comment": "lpNumberOfBytesWritten" },
+        { "op": "mov",  "args": ["qword ptr [rsp+32]", "0"], "comment": "lpOverlapped = NULL (5th arg, on stack)" },
+        { "op": "call", "args": ["import:kernel32.dll!WriteFile"] },
+        { "op": "mov",  "args": ["ecx", "0"], "comment": "exit code" },
+        { "op": "call", "args": ["import:kernel32.dll!ExitProcess"] }
+      ]
+    }
+  ]
+}

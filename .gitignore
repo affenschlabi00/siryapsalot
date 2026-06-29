@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.venv/
+venv/
+
+# Build artifacts
+/build/
+*.exe
+*.obj
+
+# Datasets (bulk; small tracked samples live under datasets/samples)
+/datasets/**
+!/datasets/samples/
+!/datasets/samples/**
+!/datasets/README.md
+
+# Training checkpoints
+/training/**
+!/training/README.md
+
+# OS
+.DS_Store
