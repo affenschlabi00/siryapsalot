@@ -71,6 +71,10 @@ def system_prompt() -> str:
         + json.dumps(_schema())
         + "\n\nExample 1 — print a string:\n" + _example("hello.ir.json")
         + "\n\nExample 2 — a loop that prints 1..5:\n" + _example("count.ir.json")
+        + "\n\nExample 3 — an interactive loop (reads stdin lines until EOF):\n"
+        + _example("guess.ir.json")
+        + "\n\nExample 4 — a GUI program (message box; note subsystem 'gui'):\n"
+        + _example("hello_gui.ir.json")
     )
 
 
