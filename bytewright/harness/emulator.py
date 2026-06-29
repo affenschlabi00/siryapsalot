@@ -118,7 +118,9 @@ class EmuContext:
         self.vfs: dict[str, bytearray] = {}
         self.handles: dict[int, tuple[str, str]] = {}
         self.dialogs: list[dict] = []          # MessageBox calls (GUI)
+        self.windows: list[dict] = []          # CreateWindowEx calls (GUI)
         self.console = VirtualConsole()         # screen buffer for positioned drawing
+        self.image_base = emu.image_base
         self._next_handle = 0x100
         self._heap = HEAP_BASE
         self.exit_code: int | None = None
@@ -346,6 +348,7 @@ class Emulator:
         state["stderr"] = bytes(self.ctx.stderr)
         state["vfs"] = {k: bytes(v) for k, v in self.ctx.vfs.items()}
         state["dialogs"] = list(self.ctx.dialogs)
+        state["windows"] = list(self.ctx.windows)
         state["screen"] = self.ctx.console.render()
         return state
 

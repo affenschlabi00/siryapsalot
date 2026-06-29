@@ -28,6 +28,7 @@ def run(path: str, stdin: str | bytes = b"", args: list | None = None,
         "instructions_executed": res["instr_count"],
         "files": {k: _decode(v) for k, v in res["vfs"].items()},
         "dialogs": res["dialogs"],
+        "windows": res["windows"],
         "screen": res["screen"],
     }
 

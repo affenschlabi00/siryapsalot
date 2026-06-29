@@ -84,6 +84,15 @@ Anthropic API if `ANTHROPIC_API_KEY` is set, otherwise a local **Ollama** model 
 or `OLLAMA_MODEL`) — so no API key is required. Ollama runs are constrained to JSON output
 (`format=json`) for reliability. The web UI is pure stdlib (`http.server`), no new dependency.
 
+## D8 — GUI: message boxes and real windows (Plan §6)
+The harness implements `user32` GUI APIs (`MessageBoxA`, `RegisterClassExA`, `CreateWindowExA`,
+`ShowWindow`, the `GetMessageA` message loop, etc.) and *records* dialogs and windows
+(title/size). `GetMessageA` returns 0 so a standard message loop exits cleanly under emulation;
+the emitted `.exe` is a genuine Win32 GUI program that shows a window on real Windows. A new
+`code:LABEL` operand takes a function pointer to a procedure (e.g. the window proc). What's not
+emulated yet: interactive control/click handling, real-time input, graphics, sound. The chatbot
+self-tests GUI programs with `expect_dialog_contains` / `expect_window_contains`.
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:

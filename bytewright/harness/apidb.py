@@ -100,6 +100,47 @@ SIGNATURES: dict[str, dict] = {
         "arg_registers": ["rcx", "rdx", "r8", "r9 (packed COORD)", "stack+0x20"],
         "returns": "rax (BOOL)",
     },
+    # --- user32: real windows (recorded by the harness; on Windows they actually show) ---
+    "GetModuleHandleA": {
+        "dll": "kernel32.dll", "signature": "HMODULE GetModuleHandleA(LPCSTR lpModuleName)",
+        "arg_registers": ["rcx"], "returns": "rax (HMODULE)",
+    },
+    "RegisterClassExA": {
+        "dll": "user32.dll", "signature": "ATOM RegisterClassExA(const WNDCLASSEXA* p)",
+        "arg_registers": ["rcx"], "returns": "rax (ATOM, nonzero on success)",
+    },
+    "CreateWindowExA": {
+        "dll": "user32.dll",
+        "signature": ("HWND CreateWindowExA(DWORD exStyle, LPCSTR className, LPCSTR windowName, "
+                      "DWORD style, int x, int y, int w, int h, HWND parent, HMENU menu, "
+                      "HINSTANCE inst, LPVOID param)"),
+        "arg_registers": ["rcx", "rdx", "r8", "r9", "stack+0x20 (x)", "stack+0x28 (y)",
+                          "stack+0x30 (w)", "stack+0x38 (h)", "..."],
+        "returns": "rax (HWND)",
+    },
+    "ShowWindow": {"dll": "user32.dll", "signature": "BOOL ShowWindow(HWND, int nCmdShow)",
+                   "arg_registers": ["rcx", "rdx"], "returns": "rax (BOOL)"},
+    "UpdateWindow": {"dll": "user32.dll", "signature": "BOOL UpdateWindow(HWND)",
+                     "arg_registers": ["rcx"], "returns": "rax (BOOL)"},
+    "GetMessageA": {
+        "dll": "user32.dll",
+        "signature": "BOOL GetMessageA(LPMSG, HWND, UINT min, UINT max)",
+        "arg_registers": ["rcx", "rdx", "r8", "r9"],
+        "returns": "rax (BOOL; the harness returns 0 so the message loop exits cleanly)",
+    },
+    "TranslateMessage": {"dll": "user32.dll", "signature": "BOOL TranslateMessage(const MSG*)",
+                         "arg_registers": ["rcx"], "returns": "rax (BOOL)"},
+    "DispatchMessageA": {"dll": "user32.dll", "signature": "LRESULT DispatchMessageA(const MSG*)",
+                         "arg_registers": ["rcx"], "returns": "rax"},
+    "DefWindowProcA": {"dll": "user32.dll",
+                       "signature": "LRESULT DefWindowProcA(HWND, UINT, WPARAM, LPARAM)",
+                       "arg_registers": ["rcx", "rdx", "r8", "r9"], "returns": "rax"},
+    "PostQuitMessage": {"dll": "user32.dll", "signature": "void PostQuitMessage(int)",
+                        "arg_registers": ["rcx"], "returns": "(void)"},
+    "LoadCursorA": {"dll": "user32.dll", "signature": "HCURSOR LoadCursorA(HINSTANCE, LPCSTR)",
+                    "arg_registers": ["rcx", "rdx"], "returns": "rax (HCURSOR)"},
+    "LoadIconA": {"dll": "user32.dll", "signature": "HICON LoadIconA(HINSTANCE, LPCSTR)",
+                  "arg_registers": ["rcx", "rdx"], "returns": "rax (HICON)"},
 }
 
 
@@ -238,6 +279,37 @@ def _FillConsoleOutputCharacterA(ctx):
     return 1
 
 
+def _GetModuleHandleA(ctx):
+    return ctx.image_base
+
+
+def _RegisterClassExA(ctx):
+    return 1  # a nonzero class atom
+
+
+def _CreateWindowExA(ctx):
+    title = ctx.read_cstr(ctx.arg(3)).decode("latin-1")
+
+    def dim(v):
+        v &= 0xFFFFFFFF
+        return "default" if v == 0x80000000 else v   # CW_USEDEFAULT
+
+    ctx.windows.append({"title": title, "width": dim(ctx.arg(7)), "height": dim(ctx.arg(8))})
+    return 0x00010000 + len(ctx.windows) * 4          # a fake but nonzero HWND
+
+
+def _GetMessageA(ctx):
+    return 0  # no messages -> a standard `while (GetMessage(...))` loop exits at once
+
+
+def _one(ctx):
+    return 1
+
+
+def _zero(ctx):
+    return 0
+
+
 IMPLS = {
     "GetStdHandle": _GetStdHandle,
     "WriteFile": _WriteFile,
@@ -255,4 +327,16 @@ IMPLS = {
     "SetConsoleCursorPosition": _SetConsoleCursorPosition,
     "SetConsoleTextAttribute": _SetConsoleTextAttribute,
     "FillConsoleOutputCharacterA": _FillConsoleOutputCharacterA,
+    "GetModuleHandleA": _GetModuleHandleA,
+    "RegisterClassExA": _RegisterClassExA,
+    "CreateWindowExA": _CreateWindowExA,
+    "ShowWindow": _one,
+    "UpdateWindow": _one,
+    "GetMessageA": _GetMessageA,
+    "TranslateMessage": _zero,
+    "DispatchMessageA": _zero,
+    "DefWindowProcA": _zero,
+    "PostQuitMessage": _zero,
+    "LoadCursorA": _one,
+    "LoadIconA": _one,
 }

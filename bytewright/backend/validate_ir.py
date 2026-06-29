@@ -16,6 +16,7 @@ _SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "schema", "ir
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _DATA_REF = re.compile(r"data:([A-Za-z_]\w*)")
+_CODE_REF = re.compile(r"code:([A-Za-z_]\w*)")
 _IMPORT_REF = re.compile(r"^import:([\w.\-]+\.dll)!([A-Za-z_]\w*)$", re.IGNORECASE)
 
 
@@ -89,6 +90,10 @@ def validate_ir(ir: Any) -> list[dict]:
             for m in _DATA_REF.finditer(a):
                 if m.group(1) not in data_labels:
                     errors.append(err("semantic", f"unknown data label '{m.group(1)}'", ref))
+            # code: references (function pointers) must point at a known code label
+            for m in _CODE_REF.finditer(a):
+                if m.group(1) not in code_labels:
+                    errors.append(err("semantic", f"unknown code label '{m.group(1)}'", ref))
             # import: references must be declared and only used by call/jmp
             if a.lower().startswith("import:"):
                 m = _IMPORT_REF.match(a)

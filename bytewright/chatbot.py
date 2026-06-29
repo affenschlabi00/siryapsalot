@@ -39,6 +39,10 @@ def _check(test: dict, run: dict) -> tuple[bool, str]:
         shown = " | ".join(f"{d['caption']}: {d['text']}" for d in run.get("dialogs", []))
         if test["expect_dialog_contains"] not in shown:
             return False, f"no message box containing {test['expect_dialog_contains']!r} (saw: {shown!r})"
+    if test.get("expect_window_contains"):
+        titles = " | ".join(str(w.get("title", "")) for w in run.get("windows", []))
+        if test["expect_window_contains"] not in titles:
+            return False, f"no window titled like {test['expect_window_contains']!r} (saw: {titles!r})"
     return True, ""
 
 
@@ -132,6 +136,9 @@ class Chatbot:
         if view.strip():
             shown = view if len(view) < 800 else view[:800] + "…"
             lines.append("\nOutput:\n" + "\n".join("    " + ln for ln in shown.splitlines()))
+        elif run.get("windows"):
+            w = run["windows"][0]
+            lines.append(f"\nIt opens a window titled “{w['title']}” ({w.get('width')}×{w.get('height')}).")
         elif run.get("dialogs"):
             d = run["dialogs"][0]
             lines.append(f"\nIt pops up a message box — [{d['caption']}] {d['text']!r}")

@@ -39,6 +39,9 @@ def claude_model(message, feedback, iteration, history):
                      "live-keyboard APIs), so I built an ASCII Tetris board — the closest console "
                      "version. A playable build is on the roadmap once GUI support lands.",
                      [{"stdin": "", "expect_contains": "+----------+"}])
+    if "window" in m:
+        return _spec("hello_window", "opens a real Win32 window (640x480)",
+                     [{"stdin": "", "expect_window_contains": "Bytewright"}])
     if "message box" in m or "popup" in m or "pop up" in m or "gui" in m:
         return _spec("hello_gui", "pops up a Windows message box (a GUI binary)",
                      [{"stdin": "", "expect_dialog_contains": "GUI binary"}])
@@ -59,6 +62,7 @@ def main():
     conversation = [
         "make me a christmas tree",
         "pop up a message box that says hello",
+        "open a window titled hello",
         "draw me a box with a label",
         "make me a tic-tac-toe game",
         "make me a tetris game",

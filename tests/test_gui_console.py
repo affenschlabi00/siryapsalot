@@ -30,9 +30,37 @@ def test_virtual_console_draw_box(build_dir):
     assert r["screen"].count("#") > 20            # borders all present
 
 
+def test_real_window_is_created(build_dir):
+    out = os.path.join(build_dir, "hello_window.exe")
+    rep = harness.build_binary(load_example("hello_window.ir.json"), out)
+    assert rep["ok"], rep["errors"]
+    assert harness.validate_pe(out)["headers"]["subsystem"] == "gui"
+    r = harness.run(out)
+    assert not r["crashed"] and r["exit_code"] == 0      # message loop exits cleanly
+    assert r["windows"] and "Bytewright window" in r["windows"][0]["title"]
+    assert r["windows"][0]["width"] == 640
+
+
+def test_chatbot_verifies_window(build_dir):
+    gen = lambda m, fb, it, h: {"program_name": "hello_window", "explanation": "opens a window",
+                                "ir": load_example("hello_window.ir.json"),
+                                "self_tests": [{"stdin": "", "expect_window_contains": "Bytewright"}]}
+    assert Chatbot(gen, out_dir=build_dir).send("open a window")["success"]
+
+
 def test_resolve_api_messagebox():
     ra = harness.resolve_api("MessageBoxA")
     assert ra["known"] and ra["dll"] == "user32.dll"
+
+
+def test_code_reference_function_pointer(build_dir):
+    """`code:LABEL` takes a function pointer (used to register a window proc)."""
+    from bytewright import harness as H
+    out = os.path.join(build_dir, "hello_window2.exe")
+    H.build_binary(load_example("hello_window.ir.json"), out)
+    # the window proc address must be a real code address inside .text
+    d = H.disassemble(out, {"count": 6})["instructions"]
+    assert any("lea" in i["mnemonic"] for i in d)
 
 
 def test_chatbot_verifies_dialog(build_dir):

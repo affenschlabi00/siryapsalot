@@ -35,7 +35,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 3 | Agentic scaffolding (intent → build → run → repair) | ✅ chatbot (terminal + **browser GUI**), self-test + repair loop, 9-task eval; **Anthropic or local Ollama** |
 | 4 | Training-data factory | 🟡 harvester emits verified (intent→IR), (intent→raw bytes), and repair-trajectory samples; SFT formatter |
 | 5 | Train: distill, then RLVR | 🟡 dense reward ladder (scores IR *and* raw bytes) + an `RLEnv` (harness-as-reward); training run gated on compute |
-| 6 | Harden & expand | 🟡 GUI (user32 MessageBox), positioned/colored console, a real playable game (Tic-Tac-Toe), and the **raw-bytes path** (model emits literal machine code → binary); angr verification still planned |
+| 6 | Harden & expand | 🟡 GUI (message boxes + **real windows**), positioned/colored console, a real playable game (Tic-Tac-Toe), and the **raw-bytes path** (model emits literal machine code → binary); angr verification still planned |
 
 > Phases 4–5 are *scaffolded and tested* (harvester, SFT formatter, reward ladder, RL
 > environment), but the actual training run — and the full data factory (compiling a source
@@ -79,12 +79,12 @@ bot> Done — I built prime.exe.  (self-tested: 7 -> prime, 8 -> not prime)
   (move parsing, board rendering each turn, win/draw detection) and *"make me a guessing game"*
   works too (line-buffered stdin);
 - **positioned / colored** console output (cursor + fill APIs — boxes, boards, frames);
-- simple **GUI** dialogs via `user32!MessageBoxA` (a real GUI `.exe`).
+- **GUI** programs — message boxes *and* real windows (`RegisterClassEx` + `CreateWindowEx` +
+  a message loop), e.g. *"open a window titled hello"* builds a genuine windowed `.exe`.
 
-It can't *yet* do custom windows, real-time keyboard, graphics, or sound — so a live-key
-graphical *"tetris"* is still out of reach. It won't refuse, though: it builds the closest
-version (an ASCII Tetris board) and tells you what it couldn't do. Those are the remaining
-Phase 6 items.
+It can't *yet* do window controls/buttons that react to clicks, real-time keyboard, graphics,
+or sound — so a live-key graphical *"tetris"* is still out of reach. It won't refuse, though: it
+builds the closest version and tells you what it couldn't do. Those are the remaining Phase 6 items.
 
 ```text
 you> make me a tetris game

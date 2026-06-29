@@ -17,6 +17,7 @@ from .isa import JCC, is_register
 _ks = Ks(KS_ARCH_X86, KS_MODE_64)
 
 _DATA_REF = re.compile(r"data:([A-Za-z_]\w*)")
+_SYM_REF = re.compile(r"(data|code):([A-Za-z_]\w*)")    # data: address, code: function pointer
 _IMPORT_REF = re.compile(r"^import:([\w.\-]+\.dll)!([A-Za-z_]\w*)$", re.IGNORECASE)
 _IDENT = re.compile(r"^[A-Za-z_]\w*$")
 
@@ -68,24 +69,24 @@ def encode_one(op: str, args: list) -> tuple[bytes, Reloc | None]:
             code = b"\x0f" + bytes([0x80 + JCC[op]]) + b"\x00" * 4
         return code, Reloc(len(code) - 4, "code", target)
 
-    # --- data references via RIP-relative addressing ---
-    data_target = None
+    # --- data/code references via RIP-relative addressing ---
+    sym_kind = sym_target = None
     lowered = []
     for a in args:
-        m = _DATA_REF.search(a)
+        m = _SYM_REF.search(a)
         if m:
-            if data_target is not None:
-                raise EncodeError(f"at most one data reference per instruction (`{op} {args}`)")
-            data_target = m.group(1)
-            a = _DATA_REF.sub("rip + 0", a)
-            if a.strip() == "rip + 0":      # bare `data:LABEL`, e.g. the source of `lea`
+            if sym_target is not None:
+                raise EncodeError(f"at most one symbol reference per instruction (`{op} {args}`)")
+            sym_kind, sym_target = m.group(1), m.group(2)
+            a = _SYM_REF.sub("rip + 0", a)
+            if a.strip() == "rip + 0":      # bare `data:LABEL`/`code:LABEL`, e.g. source of `lea`
                 a = "[rip + 0]"
         lowered.append(a)
 
     text = f"{op} {', '.join(lowered)}".strip()
     code = _asm(text)
-    if data_target is not None:
-        return code, Reloc(len(code) - 4, "data", data_target)
+    if sym_target is not None:
+        return code, Reloc(len(code) - 4, sym_kind, sym_target)
     return code, None
 
 
