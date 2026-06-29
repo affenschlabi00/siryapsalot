@@ -174,6 +174,26 @@ against its **oracle** (`diff_behavior`) — an objective pass/fail, not a self-
   benchmarks a model from the terminal; plain `siryapsalot eval` still scores the reference
   solutions as a harness self-check.
 
+## D13 — Chat-vs-build routing: small talk gets a reply, not a build
+Every message used to go straight into the build → run → self-test → repair loop, so a plain
+"hello" made the model invent some program and grind through up to `max_iters` model calls +
+builds — which looks like a hang (especially on a slow local Ollama). `Chatbot.send` now routes:
+
+- **Instant heuristic** (`chatbot._quick_chat`): obvious small talk — greetings, thanks, "what
+  can you do?", "who are you" — gets a friendly canned reply with **zero** model calls and no
+  build. A build-keyword guard means anything like "make/build/draw/window/tetris/…" is never
+  swallowed as chat. This is what makes "hello" feel instant.
+- **Model-side `kind`**: the chatbot prompt now asks the model to return either
+  `{"kind":"chat","reply":…}` or `{"kind":"build", program_name, explanation, ir, self_tests}`.
+  `send` honors `kind=="chat"` (reply, no build). `_is_chat_spec` treats a legacy spec with an
+  `ir` and no `kind` as a build, so older generators/tests are unaffected.
+
+Chat turns are recorded in history (`{"message","reply","chat":True}`) and replayed to the model
+as real assistant turns, so the conversation stays coherent across chat and build. A chat result
+is `{"success":True,"reply":…,"path":None,"chat":True}`; the web/CLI already handle a missing
+binary (no download). When unsure, the model is told to prefer chat and ask a clarifying question
+rather than build something random.
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:

@@ -81,7 +81,7 @@ class StandIn:
 def main():
     bot = Chatbot(StandIn())
     print(f"💬 chatting with {bot.mode.name}\n")
-    for msg in ["make me a christmas tree", "make me a tic-tac-toe game",
+    for msg in ["hello", "make me a christmas tree", "make me a tic-tac-toe game",
                 "now tell me whether a number is prime"]:
         print("=" * 72 + f"\nyou> {msg}\n")
         print(f"{bot.mode.name}> " + bot.send(msg)["reply"])

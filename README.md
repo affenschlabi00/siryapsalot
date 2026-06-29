@@ -79,11 +79,18 @@ siryapsalot serve      # browser chat UI at http://127.0.0.1:8765 (provider+mode
 ```
 
 ```text
+you> hello
+bot> Hey! 👋 I'm Sir Yaps-a-Lot — tell me what to build, e.g. "make me a calculator".
 you> make me a christmas tree
 bot> Done — I built christmas_tree.exe.   *  / *** / ***** / ...
 you> now something that tells me if a number is prime
 bot> Done — I built prime.exe.  (self-tested: 7 -> prime, 8 -> not prime)
 ```
+
+It's a real chat: small talk and questions ("hi", "what can you do?", "thanks") get a normal
+reply — it only fires up the build pipeline when you actually ask for a program, so a "hello"
+never hangs while it tries to compile something. (Greetings are answered instantly without even
+calling the model; for anything ambiguous the model itself decides chat-vs-build.)
 
 ## Two builders — pick who you chat with
 

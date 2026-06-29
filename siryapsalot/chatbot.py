@@ -18,6 +18,68 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")[:28] or "program"
 
 
+# --- chat vs. build routing -------------------------------------------------------------------
+# So a plain "hello" gets a friendly reply instead of kicking off the build+repair loop (which is
+# slow and pointless for small talk). Two layers: an instant no-model heuristic for obvious chat,
+# and a model-side "kind" the generator can return to chat instead of build.
+_GREETING = {"hi", "hello", "hey", "yo", "sup", "hiya", "howdy", "heya", "hello there",
+             "hi there", "hey there", "good morning", "good afternoon", "good evening",
+             "greetings", "gm", "g'day", "hola", "wassup", "whats up", "what's up", "yo yo"}
+_THANKS = {"thanks", "thank you", "thankyou", "thx", "ty", "cheers", "thank u",
+           "much appreciated", "appreciate it", "nice", "cool", "awesome", "great", "ok thanks"}
+_BYE = {"bye", "goodbye", "see ya", "see you", "cya", "later", "good night", "gn"}
+_HELP = {"help", "what can you do", "what do you do", "who are you", "what are you",
+         "what is this", "how does this work", "how do you work", "what can i do",
+         "what should i do", "what now", "how do i use this", "how do i use you"}
+_BUILD_HINT = re.compile(
+    r"\b(make|build|created?|write|generate|gimme|give me|code|compile|program|app|exe|"
+    r"binary|game|calculator|print|draw|window|button|beep|sound|tetris|tic.?tac|"
+    r"fizzbuzz|prime|fibonacci|factorial|sort|hello world)\b")
+
+_GREET_REPLY = ("Hey! 👋 I'm Sir Yaps-a-Lot — I turn plain English into real Windows .exe files. "
+                "Tell me what to build, e.g. “make me a calculator”, “primes under "
+                "50”, or “a window with a button that beeps”.")
+_HELP_REPLY = ("I build working Windows programs from a plain-English description — no specs "
+               "needed. I can make console apps and text games (calculator, FizzBuzz, "
+               "tic-tac-toe…), positioned/colored console drawings, and GUI apps with "
+               "windows, clickable buttons and sound. Just say things like “make me a "
+               "guessing game” or “draw a box that says HELLO” and I’ll build, "
+               "test, and hand you the .exe. What should I build?")
+
+
+def _quick_chat(message: str) -> str | None:
+    """Instant, no-model reply for obvious small talk so a greeting never starts a build."""
+    norm = re.sub(r"[\s!?.,'’\"]+", " ", str(message).lower()).strip()
+    if not norm or _BUILD_HINT.search(norm):
+        return None
+    words = norm.split()
+    if len(words) > 6:                       # longer messages are probably real requests
+        return None
+    if norm in _GREETING or (len(words) <= 2 and words[0] in
+                             {"hi", "hello", "hey", "yo", "sup", "hiya", "howdy", "heya"}):
+        return _GREET_REPLY
+    if norm in _THANKS:
+        return "You're welcome! 🙂 Want me to build something else?"
+    if norm in _BYE:
+        return "See you! 👋"
+    if norm in _HELP or norm.startswith(("what can you", "what do you", "who are you",
+                                         "what are you", "how does this", "how do you")):
+        return _HELP_REPLY
+    return None
+
+
+def _is_chat_spec(spec) -> bool:
+    """Did the model choose to chat rather than build? (kind=='chat', or a reply with no IR.)"""
+    if not isinstance(spec, dict):
+        return False
+    kind = str(spec.get("kind", "")).lower()
+    if kind == "chat":
+        return True
+    if kind == "build":
+        return False
+    return ("reply" in spec) and not ("ir" in spec or "code" in spec)
+
+
 def _check(test: dict, run: dict) -> tuple[bool, str]:
     """Did this self-test pass? Returns (ok, reason-if-not)."""
     if run["crashed"]:
@@ -116,10 +178,26 @@ class Chatbot:
 
     def send(self, message: str, verbose: bool = False) -> dict:
         os.makedirs(self.out_dir, exist_ok=True)
+
+        # Small talk: reply instantly without touching the model or the build pipeline.
+        quick = _quick_chat(message)
+        if quick is not None:
+            self.history.append({"message": message, "reply": quick, "chat": True})
+            return {"success": True, "reply": quick, "path": None, "ir": None,
+                    "chat": True, "iterations": 0}
+
         feedback = None
         spec = {}
         for it in range(self.max_iters):
             spec = self.generator(message, feedback, it, self.history)
+
+            # The model can also choose to chat instead of build (kind=="chat"); honor it.
+            if feedback is None and _is_chat_spec(spec):
+                reply = str(spec.get("reply") or "").strip() or _GREET_REPLY
+                self.history.append({"message": message, "reply": reply, "chat": True})
+                return {"success": True, "reply": reply, "path": None, "ir": None,
+                        "chat": True, "iterations": it + 1}
+
             ir = spec.get("ir", spec)  # tolerate a bare IR
             name = spec.get("program_name") or _slug(message)
             tests = spec.get("self_tests") or [{"stdin": ""}]
@@ -237,8 +315,11 @@ class ChatbotGenerator:
         msgs = []
         for turn in history:
             msgs.append({"role": "user", "content": turn["message"]})
-            msgs.append({"role": "assistant",
-                         "content": f"(built {turn['program_name']}: {turn['explanation']})"})
+            if turn.get("chat"):
+                msgs.append({"role": "assistant", "content": turn.get("reply", "")})
+            else:
+                msgs.append({"role": "assistant",
+                             "content": f"(built {turn['program_name']}: {turn['explanation']})"})
         user = message if not feedback else f"{message}\n\n[automatic feedback]\n{feedback}"
         msgs.append({"role": "user", "content": user})
         text = self.backend.chat(self._prompt.chatbot_system_prompt(self.mode), msgs)
