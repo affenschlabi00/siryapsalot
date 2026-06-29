@@ -36,6 +36,12 @@ def claude_model(message, feedback, iteration, history):
                      "live-keyboard APIs), so I built an ASCII Tetris board — the closest console "
                      "version. A playable build is on the roadmap once GUI support lands.",
                      [{"stdin": "", "expect_contains": "+----------+"}])
+    if "message box" in m or "popup" in m or "pop up" in m or "gui" in m:
+        return _spec("hello_gui", "pops up a Windows message box (a GUI binary)",
+                     [{"stdin": "", "expect_dialog_contains": "GUI binary"}])
+    if "box" in m or "draw" in m:
+        return _spec("draw_box", "draws a bordered box with a label using console cursor APIs",
+                     [{"stdin": "", "expect_screen_contains": "HELLO"}])
     if "guess" in m:
         return _spec("guess", "a number-guessing game (target 42) — type guesses, get hints",
                      [{"stdin": "50\n40\n42\n", "expect_contains": "correct!"}])
@@ -49,6 +55,8 @@ def main():
     bot = Chatbot(claude_model)
     conversation = [
         "make me a christmas tree",
+        "pop up a message box that says hello",
+        "draw me a box with a label",
         "make me a tetris game",
         "now write something that tells me whether a number is prime",
         "make me a guessing game",

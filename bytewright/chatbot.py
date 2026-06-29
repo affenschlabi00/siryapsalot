@@ -31,6 +31,14 @@ def _check(test: dict, run: dict) -> tuple[bool, str]:
     if test.get("expect_contains"):
         if test["expect_contains"] not in out:
             return False, f"output {out!r} does not contain {test['expect_contains']!r}"
+    if test.get("expect_screen_contains"):
+        if test["expect_screen_contains"] not in run.get("screen", ""):
+            return False, (f"the rendered screen does not contain "
+                           f"{test['expect_screen_contains']!r}")
+    if test.get("expect_dialog_contains"):
+        shown = " | ".join(f"{d['caption']}: {d['text']}" for d in run.get("dialogs", []))
+        if test["expect_dialog_contains"] not in shown:
+            return False, f"no message box containing {test['expect_dialog_contains']!r} (saw: {shown!r})"
     return True, ""
 
 
@@ -108,11 +116,21 @@ class Chatbot:
     def _success_reply(self, spec, runs) -> str:
         expl = spec.get("explanation") or "your program"
         name = spec.get("program_name", "program")
-        sample = runs[0][1]["stdout"]
-        shown = sample if len(sample) < 400 else sample[:400] + "…"
+        run = runs[0][1]
         lines = [f"Done — I built **{name}.exe**. {expl}"]
-        if shown.strip():
-            lines.append("\nSample run:\n" + "\n".join("    " + ln for ln in shown.splitlines()))
+
+        stdout = run["stdout"]
+        screen = run.get("screen", "")
+        # positioned-drawing programs put the real picture on the screen; prefer the richer view
+        nonblank = lambda s: len([ln for ln in s.splitlines() if ln.strip()])
+        view = screen if nonblank(screen) > nonblank(stdout) else stdout
+
+        if view.strip():
+            shown = view if len(view) < 800 else view[:800] + "…"
+            lines.append("\nOutput:\n" + "\n".join("    " + ln for ln in shown.splitlines()))
+        elif run.get("dialogs"):
+            d = run["dialogs"][0]
+            lines.append(f"\nIt pops up a message box — [{d['caption']}] {d['text']!r}")
         lines.append(f"\nIt passed {len(runs)} self-test(s). The binary is at build/{name}.exe.")
         return "\n".join(lines)
 

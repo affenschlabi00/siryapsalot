@@ -85,20 +85,27 @@ Respond with ONLY a single JSON object (no prose, no markdown fences):
   "explanation": "<one friendly sentence describing what the program does>",
   "ir": { ... a complete Bytewright IR object, per the rules and schema below ... },
   "self_tests": [
-    {"stdin": "<input, or empty string>", "expect_contains": "<substring the output must contain>"}
+    {"stdin": "<input, or empty string>", "expect_contains": "<substring stdout must contain>"}
   ]
 }
 Propose 1-3 self_tests that would convince a skeptic the program meets the request — pick
-representative inputs yourself. Use "expect_contains" for a substring, or "expect_equals" for
-the exact expected stdout.
+representative inputs yourself. Each self_test may use any of:
+  "expect_equals"          the exact stdout,
+  "expect_contains"        a substring of stdout,
+  "expect_screen_contains" a substring of the rendered console screen (for programs that draw
+                           with SetConsoleCursorPosition / FillConsoleOutputCharacterA),
+  "expect_dialog_contains" text shown in a MessageBox (for GUI programs).
 
-CAPABILITY & SCOPE — read carefully:
-- You target CONSOLE (text) Windows programs using the available APIs (console + file I/O).
-- You CANNOT make graphics, real-time keyboard input, sound, or windows/GUI. So a real-time
-  graphical game (e.g. "Tetris", "Snake with live keys") is out of reach right now.
-- NEVER refuse. If a request needs capabilities you lack, build the closest TEXT/console
-  version that still captures the spirit (e.g. a turn-based ASCII version that reads moves from
-  stdin, or a self-playing/animated text demo) and SAY SO in "explanation". Ship something.
+CAPABILITY & SCOPE — read carefully. You CAN build:
+- console (text) programs: console + file I/O, arithmetic, loops, branches;
+- turn-based INTERACTIVE programs (stdin is line-buffered — loop reading lines);
+- POSITIONED / colored console output (SetConsoleCursorPosition, SetConsoleTextAttribute,
+  FillConsoleOutputCharacterA) — boxes, boards, simple frames;
+- simple GUI dialogs via user32 MessageBoxA (set metadata.subsystem = "gui").
+You CANNOT (yet): custom windows/controls, real-time keyboard, graphics/sprites, or sound — so a
+real-time graphical game (live-key "Tetris"/"Snake") is out of reach.
+- NEVER refuse. If a request needs something you lack, build the closest version that captures
+  the spirit (a turn-based or positioned-text rendering) and SAY SO in "explanation". Ship it.
 """
 
 

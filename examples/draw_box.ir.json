@@ -1,0 +1,724 @@
+{
+  "metadata": {
+    "name": "draw_box",
+    "subsystem": "console",
+    "entry": "main",
+    "description": "Draws a bordered box and writes HELLO inside it using console cursor/fill APIs."
+  },
+  "imports": [
+    {
+      "dll": "kernel32.dll",
+      "function": "GetStdHandle"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "WriteFile"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "SetConsoleCursorPosition"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "FillConsoleOutputCharacterA"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    }
+  ],
+  "data": [
+    {
+      "label": "hStdout",
+      "type": "u64",
+      "value": 0
+    },
+    {
+      "label": "written",
+      "type": "u32",
+      "value": 0
+    },
+    {
+      "label": "label",
+      "type": "bytes",
+      "value": "HELLO"
+    }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "-11"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!GetStdHandle"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [data:hStdout]",
+            "rax"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "12"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "131076"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "12"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "524292"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "196612"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "196623"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "262148"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "262159"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "327684"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "327695"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "393220"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "393231"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "458756"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "edx",
+            "35"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "1"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "458767"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rax",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "rax"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!FillConsoleOutputCharacterA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rdx",
+            "327686"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!SetConsoleCursorPosition"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "qword ptr [data:hStdout]"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:label"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r8d",
+            "5"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r9",
+            "data:written"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "qword ptr [rsp+32]",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!WriteFile"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ExitProcess"
+          ]
+        }
+      ]
+    }
+  ]
+}

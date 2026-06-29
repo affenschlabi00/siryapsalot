@@ -41,6 +41,70 @@ def _align(n, a=0x1000):
     return (n + a - 1) & ~(a - 1)
 
 
+class VirtualConsole:
+    """A screen-buffer model so positioned/colored console programs are observable (Plan §6).
+
+    Plain WriteFile output advances the cursor like a terminal; SetConsoleCursorPosition /
+    SetConsoleTextAttribute / FillConsoleOutputCharacter let a program draw at coordinates.
+    render() returns the visible screen — what a game self-tests against.
+    """
+
+    def __init__(self, w: int = 80, h: int = 25):
+        self.w, self.h = w, h
+        self.grid = [[" "] * w for _ in range(h)]
+        self.attr = [[7] * w for _ in range(h)]
+        self.cx = self.cy = 0
+        self.cur_attr = 7
+
+    def _scroll(self):
+        self.grid.pop(0)
+        self.grid.append([" "] * self.w)
+        self.attr.pop(0)
+        self.attr.append([7] * self.w)
+        self.cy = self.h - 1
+
+    def set_cursor(self, x: int, y: int):
+        self.cx = max(0, min(x, self.w - 1))
+        self.cy = max(0, min(y, self.h - 1))
+
+    def set_attr(self, a: int):
+        self.cur_attr = a
+
+    def write_text(self, data: bytes):
+        for byte in data:
+            ch = chr(byte)
+            if ch == "\n":
+                self.cx = 0
+                self.cy += 1
+            elif ch == "\r":
+                self.cx = 0
+            elif ch == "\t":
+                self.cx = min(self.w - 1, (self.cx // 8 + 1) * 8)
+            else:
+                if self.cy >= self.h:
+                    self._scroll()
+                self.grid[self.cy][self.cx] = ch
+                self.attr[self.cy][self.cx] = self.cur_attr
+                self.cx += 1
+                if self.cx >= self.w:
+                    self.cx = 0
+                    self.cy += 1
+            if self.cy >= self.h:
+                self._scroll()
+
+    def fill_char(self, ch: str, count: int, x: int, y: int):
+        for i in range(count):
+            px, py = x + i, y
+            if 0 <= py < self.h and 0 <= px < self.w:
+                self.grid[py][px] = ch
+
+    def render(self) -> str:
+        rows = ["".join(r).rstrip() for r in self.grid]
+        while rows and rows[-1] == "":
+            rows.pop()
+        return "\n".join(rows)
+
+
 class EmuContext:
     """The handle API implementations use to read args, touch memory, and capture I/O."""
 
@@ -53,6 +117,8 @@ class EmuContext:
         self.stdin_pos = 0
         self.vfs: dict[str, bytearray] = {}
         self.handles: dict[int, tuple[str, str]] = {}
+        self.dialogs: list[dict] = []          # MessageBox calls (GUI)
+        self.console = VirtualConsole()         # screen buffer for positioned drawing
         self._next_handle = 0x100
         self._heap = HEAP_BASE
         self.exit_code: int | None = None
@@ -279,6 +345,8 @@ class Emulator:
         state["stdout"] = bytes(self.ctx.stdout)
         state["stderr"] = bytes(self.ctx.stderr)
         state["vfs"] = {k: bytes(v) for k, v in self.ctx.vfs.items()}
+        state["dialogs"] = list(self.ctx.dialogs)
+        state["screen"] = self.ctx.console.render()
         return state
 
     def _snapshot(self) -> dict:

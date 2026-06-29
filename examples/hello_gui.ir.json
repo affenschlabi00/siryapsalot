@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "name": "hello_gui",
+    "subsystem": "gui",
+    "entry": "main",
+    "description": "Pops up a Windows message box. A GUI .exe (user32.dll), no console."
+  },
+  "imports": [
+    {
+      "dll": "user32.dll",
+      "function": "MessageBoxA"
+    },
+    {
+      "dll": "kernel32.dll",
+      "function": "ExitProcess"
+    }
+  ],
+  "data": [
+    {
+      "label": "text",
+      "type": "bytes",
+      "value": "Hello from a real GUI binary!\u0000"
+    },
+    {
+      "label": "caption",
+      "type": "bytes",
+      "value": "bytewright\u0000"
+    }
+  ],
+  "code": [
+    {
+      "label": "main",
+      "instructions": [
+        {
+          "op": "mov",
+          "args": [
+            "rcx",
+            "0"
+          ],
+          "comment": "hWnd = NULL"
+        },
+        {
+          "op": "lea",
+          "args": [
+            "rdx",
+            "data:text"
+          ]
+        },
+        {
+          "op": "lea",
+          "args": [
+            "r8",
+            "data:caption"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "r9",
+            "0"
+          ],
+          "comment": "MB_OK"
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:user32.dll!MessageBoxA"
+          ]
+        },
+        {
+          "op": "mov",
+          "args": [
+            "ecx",
+            "0"
+          ]
+        },
+        {
+          "op": "call",
+          "args": [
+            "import:kernel32.dll!ExitProcess"
+          ]
+        }
+      ]
+    }
+  ]
+}

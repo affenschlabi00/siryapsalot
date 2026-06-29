@@ -76,6 +76,30 @@ SIGNATURES: dict[str, dict] = {
         "dll": "kernel32.dll", "signature": "VOID Sleep(DWORD dwMilliseconds)",
         "arg_registers": ["rcx"], "returns": "(void)",
     },
+    # --- user32: minimal GUI surface (Plan §6) ---
+    "MessageBoxA": {
+        "dll": "user32.dll",
+        "signature": "int MessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)",
+        "arg_registers": ["rcx", "rdx", "r8", "r9"], "returns": "rax (int; IDOK=1)",
+    },
+    # --- kernel32 console drawing (positioned/colored text — Plan §6) ---
+    "SetConsoleCursorPosition": {
+        "dll": "kernel32.dll",
+        "signature": "BOOL SetConsoleCursorPosition(HANDLE hConsoleOutput, COORD dwCursorPosition)",
+        "arg_registers": ["rcx", "rdx (packed COORD: X=low16, Y=high16)"], "returns": "rax (BOOL)",
+    },
+    "SetConsoleTextAttribute": {
+        "dll": "kernel32.dll",
+        "signature": "BOOL SetConsoleTextAttribute(HANDLE hConsoleOutput, WORD wAttributes)",
+        "arg_registers": ["rcx", "rdx"], "returns": "rax (BOOL)",
+    },
+    "FillConsoleOutputCharacterA": {
+        "dll": "kernel32.dll",
+        "signature": ("BOOL FillConsoleOutputCharacterA(HANDLE h, CHAR c, DWORD nLength, "
+                      "COORD dwWriteCoord, LPDWORD lpNumberOfCharsWritten)"),
+        "arg_registers": ["rcx", "rdx", "r8", "r9 (packed COORD)", "stack+0x20"],
+        "returns": "rax (BOOL)",
+    },
 }
 
 
@@ -109,12 +133,14 @@ def _write_common(ctx, n_index):
     data = ctx.read_mem(buf, n)
     if h == STD_OUTPUT:
         ctx.stdout.extend(data)
+        ctx.console.write_text(data)
     elif h == STD_ERROR:
         ctx.stderr.extend(data)
     elif h in ctx.handles and ctx.handles[h][0] == "file":
         ctx.vfs[ctx.handles[h][1]].extend(data)
     else:
         ctx.stdout.extend(data)  # default: treat unknown handle as stdout
+        ctx.console.write_text(data)
     if written_ptr:
         ctx.write_u32(written_ptr, n)
     return 1
@@ -183,6 +209,35 @@ def _Sleep(ctx):
     return 0
 
 
+def _MessageBoxA(ctx):
+    text = ctx.read_cstr(ctx.arg(2)).decode("latin-1")
+    caption = ctx.read_cstr(ctx.arg(3)).decode("latin-1")
+    ctx.dialogs.append({"text": text, "caption": caption, "type": ctx.arg(4) & 0xFFFFFFFF})
+    return 1  # IDOK
+
+
+def _SetConsoleCursorPosition(ctx):
+    coord = ctx.arg(2)
+    ctx.console.set_cursor(coord & 0xFFFF, (coord >> 16) & 0xFFFF)
+    return 1
+
+
+def _SetConsoleTextAttribute(ctx):
+    ctx.console.set_attr(ctx.arg(2) & 0xFFFF)
+    return 1
+
+
+def _FillConsoleOutputCharacterA(ctx):
+    ch = chr(ctx.arg(2) & 0xFF)
+    count = ctx.arg(3) & 0xFFFFFFFF
+    coord = ctx.arg(4)
+    ctx.console.fill_char(ch, count, coord & 0xFFFF, (coord >> 16) & 0xFFFF)
+    written = ctx.arg(5)
+    if written:
+        ctx.write_u32(written, count)
+    return 1
+
+
 IMPLS = {
     "GetStdHandle": _GetStdHandle,
     "WriteFile": _WriteFile,
@@ -196,4 +251,8 @@ IMPLS = {
     "HeapAlloc": _HeapAlloc,
     "GetLastError": _GetLastError,
     "Sleep": _Sleep,
+    "MessageBoxA": _MessageBoxA,
+    "SetConsoleCursorPosition": _SetConsoleCursorPosition,
+    "SetConsoleTextAttribute": _SetConsoleTextAttribute,
+    "FillConsoleOutputCharacterA": _FillConsoleOutputCharacterA,
 }

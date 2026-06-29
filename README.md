@@ -27,7 +27,7 @@ does triple duty — correctness checker, debugger, and (later) RL reward — bu
 | 3 | Agentic scaffolding (intent → build → run → repair) | ✅ `create`/`chat` + repair loop + 8-task eval suite |
 | 4 | Training-data factory | 🟡 starter: harvester emits verified (intent→IR) + repair-trajectory samples |
 | 5 | Train: distill, then RLVR | 🟡 starter: the dense reward ladder (the RLVR reward) is built (`bytewright/reward.py`) |
-| 6 | Harden & expand | planned (more Win32 surface, GUI, angr, raw-hex stretch) |
+| 6 | Harden & expand | 🟡 in progress: GUI message boxes (user32), positioned/colored console (cursor + fill); angr verification & raw-hex stretch still planned |
 
 > Phases 4–5 are *started* (the data harvester and reward function are real and tested), but
 > the full data factory (compiling a source corpus at multiple optimization levels) and the
@@ -57,12 +57,16 @@ One-shot, same thing:
 python -m bytewright.cli create "print the fibonacci numbers below 100"
 ```
 
-**Scope, honestly.** The backend builds *console* (text) Windows programs — including
-**turn-based interactive** ones (stdin is line-buffered, so a program can loop reading guesses
-or moves; e.g. *"make me a guessing game"* really works). Ask for something graphical or
-real-time — *"make me a tetris game"* — and it won't refuse: it builds the closest console
-version (an ASCII Tetris board) and tells you what it couldn't do. Real GUI/real-time games are
-the Phase 6 expansion (graphics + live-input APIs).
+**Scope, honestly.** Bytewright builds:
+- console (text) programs — arithmetic, loops, file + console I/O;
+- **turn-based interactive** programs (line-buffered stdin — *"make me a guessing game"* works);
+- **positioned / colored** console output (cursor + fill APIs — boxes, boards, frames);
+- simple **GUI** dialogs via `user32!MessageBoxA` (a real GUI `.exe`).
+
+It can't *yet* do custom windows, real-time keyboard, graphics, or sound — so a live-key
+graphical *"tetris"* is still out of reach. It won't refuse, though: it builds the closest
+version (an ASCII Tetris board) and tells you what it couldn't do. Those are the remaining
+Phase 6 items.
 
 ```text
 you> make me a tetris game
