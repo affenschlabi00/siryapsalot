@@ -32,23 +32,28 @@ class ChatService:
         self._eval_lock = threading.Lock()
         self._eval: dict = {"running": False, "done": 0, "total": 0, "results": [],
                             "backend": None, "model": None, "summary": None, "error": None}
+        self._build_lock = threading.Lock()
+        self._build: dict = {"running": False, "steps": [], "latest": None, "stage": None,
+                             "result": None}
 
-    def message(self, text: str, mode=None, model=None, backend=None) -> dict:
-        if backend and backend != getattr(self.bot.backend, "name", None):
+    def message(self, text: str, mode=None, model=None, backend=None, api_key=None,
+                progress=None) -> dict:
+        if backend and (backend != getattr(self.bot.backend, "name", None) or api_key):
             try:
-                self.bot.set_backend(backend)
+                self.bot.set_backend(backend, api_key=api_key, model=model)
             except Exception:
                 pass                                  # keep the working backend if the switch fails
         if mode:
             self.bot.switch(mode)
         if model:
             self.bot.set_model(model)
-        res = self.bot.send(text)
+        res = self.bot.send(text, progress=progress)
         download = (os.path.basename(res["path"])
                     if res.get("success") and res.get("path") else None)
         persona = self.bot.mode.name if self.bot.mode else "Sir Yaps-a-Lot"
         return {"reply": res["reply"], "success": res["success"], "persona": persona,
-                "download": download, "iterations": res.get("iterations")}
+                "download": download, "iterations": res.get("iterations"),
+                "chat": res.get("chat", False)}
 
     def _backend_info(self) -> dict:
         """The current provider, its model, and the models it offers (for the model picker)."""
@@ -60,13 +65,16 @@ class ChatService:
         return {"backend": getattr(b, "name", "?"), "model": getattr(b, "model", "?"),
                 "models": models}
 
-    def set_backend(self, name: str) -> dict:
-        """Switch the LLM provider and report its models, so the model dropdown can refresh."""
+    def set_backend(self, name: str, api_key=None, model=None) -> dict:
+        """Switch the LLM provider and report its models, so the model dropdown can refresh.
+        On failure, say whether an API key is what's missing so the UI can prompt for one."""
+        from . import llm
         try:
-            self.bot.set_backend(name)
+            self.bot.set_backend(name, api_key=api_key, model=model)
             return {"ok": True, **self._backend_info()}
         except Exception as e:
-            return {"ok": False, "error": str(e), **self._backend_info()}
+            return {"ok": False, "error": str(e), "needs_key": llm.needs_key(name),
+                    **self._backend_info()}
 
     def info(self) -> dict:
         """Everything the UI needs to populate its dropdowns. Built defensively: a failure in any
@@ -83,13 +91,11 @@ class ChatService:
         except Exception as e:
             out["error"] = f"backend: {e}"
         try:
-            backends = llm.available_backends()
+            out["backends"] = llm.all_backends()       # offer every provider (paste a key to use one)
+            out["ready"] = llm.available_backends()     # which ones are configured right now
         except Exception:
-            backends = []
-        cur = out.get("backend")
-        if cur and cur != "?" and cur not in backends:
-            backends = [cur] + backends                # always offer the provider currently in use
-        out["backends"] = backends
+            out["backends"] = ["openai", "anthropic", "ollama"]
+            out["ready"] = []
         try:
             from . import updater
             out.update(updater.status())
@@ -100,6 +106,43 @@ class ChatService:
     def update(self, branch=None) -> dict:
         from . import updater
         return updater.update(branch)
+
+    # --- background build with live progress (so the page isn't frozen for minutes) -------
+    def start_build(self, text: str, mode=None, model=None, backend=None, api_key=None) -> dict:
+        """Run a build in a background thread; the UI polls build_status() for live progress."""
+        with self._build_lock:
+            if self._build.get("running"):
+                return {"started": False, "busy": True}
+            self._build = {"running": True, "steps": [], "latest": "Starting…",
+                           "stage": "start", "result": None}
+
+        def on_step(ev):
+            with self._build_lock:
+                self._build["steps"].append(ev)
+                self._build["stage"] = ev.get("stage")
+                if ev.get("message"):
+                    self._build["latest"] = ev["message"]
+
+        def run():
+            try:
+                res = self.message(text, mode=mode, model=model, backend=backend,
+                                   api_key=api_key, progress=on_step)
+            except Exception as e:
+                res = {"reply": f"Sorry, that failed: {e}", "success": False, "download": None,
+                       "persona": (self.bot.mode.name if self.bot.mode else "Sir Yaps-a-Lot")}
+            with self._build_lock:
+                self._build["result"] = res
+                self._build["running"] = False
+                self._build["latest"] = None
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"started": True}
+
+    def build_status(self) -> dict:
+        with self._build_lock:
+            b = self._build
+            return {"running": b["running"], "latest": b.get("latest"), "stage": b.get("stage"),
+                    "steps": list(b["steps"]), "result": b.get("result")}
 
     # --- model eval: benchmark a provider/model on the oracle-verified task suite ---------
     def eval_tasks(self) -> list[dict]:
@@ -208,7 +251,7 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
  header{padding:12px 18px;background:var(--panel);border-bottom:1px solid #30363d;
    display:flex;align-items:center;gap:10px;flex-wrap:wrap}
  header b{font-size:17px} .grow{flex:1}
- select,button.bar{background:#0d1117;color:var(--txt);border:1px solid #30363d;
+ select,button.bar,header input{background:#0d1117;color:var(--txt);border:1px solid #30363d;
    border-radius:8px;padding:7px 9px;font-size:13px}
  button.bar{cursor:pointer} button.bar:hover{border-color:var(--me)}
  #log{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
@@ -229,6 +272,8 @@ INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8">
  <b>Sir Yaps-a-Lot</b>
  <select id="mode" title="who you're chatting with"></select>
  <select id="backend" title="LLM provider"></select>
+ <input id="apikey" type="password" autocomplete="off" placeholder="API key + Enter"
+        title="paste an API key to use this provider" style="display:none;width:170px">
  <select id="model" title="LLM model"></select>
  <button class="bar" id="evalbtn" title="benchmark the selected model on the task suite">🧪 Eval</button>
  <span class="grow"></span>
@@ -245,7 +290,8 @@ const log=document.getElementById('log'),inp=document.getElementById('in'),f=doc
       backendSel=document.getElementById('backend'),
       modelSel=document.getElementById('model'),branchSel=document.getElementById('branch'),
       upd=document.getElementById('upd'),ver=document.getElementById('ver'),
-      evalbtn=document.getElementById('evalbtn');
+      evalbtn=document.getElementById('evalbtn'),apikey=document.getElementById('apikey');
+let curBackend=null;
 function fill(sel,items,cur){sel.innerHTML='';items.forEach(it=>{const o=document.createElement('option');
   o.value=it.value;o.textContent=it.label;if(it.value===cur)o.selected=true;sel.appendChild(o);});}
 function add(cls,txt,dl){const d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;
@@ -260,7 +306,9 @@ async function loadInfo(){let j={};
   fill(modeSel,modes.map(m=>({value:m.id,label:m.name})),j.mode||modes[0].id);
   const backends=(j.backends&&j.backends.length)?j.backends
     :((j.backend&&j.backend!=='?')?[j.backend]:['openai','anthropic','ollama']);
-  fill(backendSel,backends.map(b=>({value:b,label:b})),j.backend);
+  const ready=j.ready||backends;
+  fill(backendSel,backends.map(b=>({value:b,label:(ready.indexOf(b)<0?'🔑 ':'')+b})),j.backend);
+  curBackend=j.backend;
   const models=j.models||[];
   fill(modelSel, models.length?models.map(m=>({value:m,label:m}))
     :((j.model&&j.model!=='?')?[{value:j.model,label:j.model}]:[]), j.model);
@@ -268,21 +316,46 @@ async function loadInfo(){let j={};
     ver.textContent=(j.backend||'')+' · '+(j.model||'')+' · @'+(j.commit||'?');}
   else{branchSel.style.display='none';upd.title='updates need a git checkout (pip install -e .)';
     ver.textContent=(j.backend||'')+' · '+(j.model||'');}}
-backendSel.onchange=async()=>{const prev=modelSel.innerHTML;modelSel.innerHTML='<option>…</option>';
-  try{const j=await (await fetch('/api/backend',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({backend:backendSel.value})})).json();
-    if(j.ok===false){add('sys','⚠️ could not switch to '+backendSel.value+': '+(j.error||''));modelSel.innerHTML=prev;return;}
+async function switchBackend(name,key){
+  const prev=modelSel.innerHTML;modelSel.innerHTML='<option>…</option>';
+  try{const body={backend:name};if(key)body.api_key=key;
+    const j=await (await fetch('/api/backend',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)})).json();
+    if(j.ok===false){modelSel.innerHTML=prev;
+      if(j.needs_key){apikey.style.display='';apikey.placeholder=name+' API key + Enter';apikey.focus();
+        add('sys','🔑 '+name+' needs an API key — paste it in the box at the top and press Enter. '
+                  +'(Kept in memory for this session only.)');}
+      else add('sys','⚠️ could not switch to '+name+': '+(j.error||''));
+      return false;}
+    apikey.style.display='none';apikey.value='';curBackend=j.backend;
     fill(modelSel,(j.models||[]).map(m=>({value:m,label:m})),j.model);
-    ver.textContent=(j.backend||'')+' · '+(j.model||'');}
-  catch(err){add('sys','backend switch error: '+err);modelSel.innerHTML=prev;}};
+    ver.textContent=(j.backend||'')+' · '+(j.model||'');
+    add('sys','✅ now using '+(j.backend||name)+' / '+(j.model||'?'));
+    return true;}
+  catch(err){add('sys','backend switch error: '+err);modelSel.innerHTML=prev;return false;}}
+backendSel.onchange=()=>switchBackend(backendSel.value,'');
+apikey.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const k=apikey.value.trim();
+  if(k)switchBackend(backendSel.value,k);}};
 f.onsubmit=async e=>{e.preventDefault();const m=inp.value.trim();if(!m)return;
+  if(backendSel.value!==curBackend){                 // make sure the chosen provider is active first
+    const ok=await switchBackend(backendSel.value,apikey.value.trim());if(!ok)return;}
   add('me',m);inp.value='';send.disabled=true;
-  const t=document.createElement('div');t.className='msg bot';t.textContent='building…';log.appendChild(t);
-  try{const r=await fetch('/api/build',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:m,mode:modeSel.value,model:modelSel.value,backend:backendSel.value})});
-    const j=await r.json();t.remove();add('bot',(j.persona?j.persona+': ':'')+j.reply,j.download);}
-  catch(err){t.remove();add('bot','Error: '+err);}
-  send.disabled=false;inp.focus();};
+  const t=document.createElement('div');t.className='msg bot';t.textContent='⏳ starting…';
+  log.appendChild(t);log.scrollTop=log.scrollHeight;
+  let start;
+  try{start=await (await fetch('/api/build',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:m,mode:modeSel.value,model:modelSel.value,backend:backendSel.value})})).json();}
+  catch(err){t.textContent='Error: '+err;send.disabled=false;return;}
+  if(start.started===false){t.textContent=start.busy?'⏳ still finishing the last one — try again in a moment'
+      :('Error: '+(start.error||'could not start'));send.disabled=false;return;}
+  async function poll(){let s;
+    try{s=await (await fetch('/api/build/status')).json();}
+    catch(err){t.textContent='Error: '+err;send.disabled=false;return;}
+    if(s.result){const r=s.result;t.remove();add('bot',(r.persona?r.persona+': ':'')+r.reply,r.download);
+      send.disabled=false;inp.focus();return;}
+    if(s.latest)t.textContent='⏳ '+s.latest;
+    setTimeout(poll,600);}
+  poll();};
 evalbtn.onclick=async()=>{evalbtn.disabled=true;
   const card=document.createElement('div');card.className='msg bot';log.appendChild(card);
   card.textContent='🧪 starting eval…';log.scrollTop=log.scrollHeight;
@@ -363,6 +436,8 @@ def make_handler(service: ChatService):
                 self._json(service.eval_status())
             elif self.path == "/api/eval/tasks":
                 self._json({"tasks": service.eval_tasks()})
+            elif self.path == "/api/build/status":
+                self._json(service.build_status())
             elif self.path.startswith("/download/"):
                 name = os.path.basename(urllib.parse.unquote(self.path[len("/download/"):]))
                 fp = os.path.join(service.build_dir, name)
@@ -384,14 +459,16 @@ def make_handler(service: ChatService):
                 return
             if self.path == "/api/build":
                 try:
-                    out = service.message(body["message"], mode=body.get("mode"),
-                                          model=body.get("model"), backend=body.get("backend"))
+                    self._json(service.start_build(body["message"], mode=body.get("mode"),
+                                                   model=body.get("model"),
+                                                   backend=body.get("backend"),
+                                                   api_key=body.get("api_key")))
                 except Exception as e:
-                    out = {"reply": f"Sorry, that failed: {e}", "success": False, "download": None}
-                self._json(out)
+                    self._json({"started": False, "error": str(e)})
             elif self.path == "/api/backend":
                 try:
-                    self._json(service.set_backend(body.get("backend")))
+                    self._json(service.set_backend(body.get("backend"), api_key=body.get("api_key"),
+                                                   model=body.get("model")))
                 except Exception as e:
                     self._json({"ok": False, "error": str(e)})
             elif self.path == "/api/eval":

@@ -128,7 +128,7 @@ def test_web_info_reports_backend_and_models(build_dir):
         info = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/info", timeout=5).read())
         assert info["backend"] == "fake"
         assert "m1" in info["models"]
-        assert info["backends"] == ["fake"]          # the in-use backend is always offered
+        assert set(info["backends"]) == {"openai", "anthropic", "ollama"}   # all providers offered
         assert any(m["name"] == "Yapzilla" for m in info["modes"])
     finally:
         httpd.shutdown()
@@ -158,22 +158,37 @@ def test_web_set_backend_switches_provider_and_refreshes_models(build_dir, monke
     """Picking a provider returns that provider's models — the heart of the per-backend picker."""
     svc = ChatService(bot=Chatbot(_fake_gen()), build_dir=build_dir)
     assert svc._backend_info()["backend"] == "fake"
-    monkeypatch.setattr(llm, "make_backend", lambda prefer=None: _OtherBackend())
+    monkeypatch.setattr(llm, "make_backend", lambda prefer=None, **kw: _OtherBackend())
     out = svc.set_backend("openai")
     assert out["ok"] and out["backend"] == "openai"
     assert "gpt-4o" in out["models"] and "m1" not in out["models"]   # model list followed the switch
 
 
-def test_web_set_backend_failure_keeps_current(build_dir, monkeypatch):
+def test_web_set_backend_with_api_key(build_dir, monkeypatch):
+    """A key pasted in the UI is threaded through to make_backend (so you can switch w/o env vars)."""
+    seen = {}
+
+    def fake_make(prefer=None, api_key=None, model=None, **kw):
+        seen["prefer"] = prefer
+        seen["api_key"] = api_key
+        return _OtherBackend()
+
+    monkeypatch.setattr(llm, "make_backend", fake_make)
+    svc = ChatService(bot=Chatbot(_fake_gen()), build_dir=build_dir)
+    out = svc.set_backend("openai", api_key="sk-pasted")
+    assert out["ok"] and seen == {"prefer": "openai", "api_key": "sk-pasted"}
+
+
+def test_web_set_backend_failure_reports_needs_key(build_dir, monkeypatch):
     svc = ChatService(bot=Chatbot(_fake_gen()), build_dir=build_dir)
 
-    def boom(prefer=None):
-        raise llm.LLMUnavailable("no key for " + str(prefer))
+    def boom(prefer=None, **kw):
+        raise llm.LLMUnavailable("no Anthropic API key")
 
     monkeypatch.setattr(llm, "make_backend", boom)
-    out = svc.set_backend("openai")
-    assert out["ok"] is False and "no key" in out["error"]
-    assert svc._backend_info()["backend"] == "fake"                 # unchanged on failure
+    out = svc.set_backend("anthropic")
+    assert out["ok"] is False and out["needs_key"] is True           # UI knows to prompt for a key
+    assert svc._backend_info()["backend"] == "fake"                  # unchanged on failure
 
 
 # --- robustness: a failure in one part of /api/info must never empty the dropdowns ----------
@@ -189,7 +204,7 @@ def test_info_survives_updater_failure(build_dir, monkeypatch):
     monkeypatch.setattr(updater, "status", _raise(FileNotFoundError("git not found")))
     i = svc.info()
     assert [m["name"] for m in i["modes"]]                          # personas still present
-    assert i["backends"] == ["fake"]                               # provider still present
+    assert "openai" in i["backends"] and "ollama" in i["backends"]  # providers still offered
     assert i["model"] == "m1"
     assert i["available"] is False                                  # degraded, not crashed
 
@@ -209,7 +224,7 @@ def test_info_survives_backend_listing_failure(build_dir):
     g.backend = Boom()
     svc = ChatService(bot=Chatbot(g), build_dir=build_dir)
     i = svc.info()
-    assert i["modes"] and i["backends"] == ["openai"]               # still usable
+    assert i["modes"] and "openai" in i["backends"]                 # still usable
     assert i["model"] == "gpt-4o" and i["models"] == []             # model known, list just empty
 
 

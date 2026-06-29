@@ -171,7 +171,8 @@ def main(argv: list[str] | None = None) -> int:
             bot = Chatbot(ChatbotGenerator(), max_iters=args.max_iters)
         except RuntimeError as e:
             print(f"the chatbot needs a model: {e}"); return 1
-        res = bot.send(args.intent, verbose=True)
+        res = bot.send(args.intent,
+                       progress=lambda e: print(f"  … {e['message']}") if e.get("message") else None)
         print("\n" + res["reply"])
         return 0 if res["success"] else 1
     if args.cmd == "reward":
@@ -209,9 +210,14 @@ def _chat(mode=None, model=None, backend=None) -> int:
         print(f"\n💬 chatting with **{bot.mode.name}** — {bot.mode.tagline}")
         print(f"   model: {b.name} / {getattr(b, 'model', '?')}")
 
+    def prog(ev):
+        m = ev.get("message")
+        if m:
+            print(f"   … {m}")
+
     print("Sir Yaps-a-Lot. Tell me what to build and I'll make you a .exe.")
     print("Commands:  /who · /switch <persona> · /models · /model <id> · /backend <name> "
-          "· /update [branch] · /help · Ctrl-D quits")
+          "· /key <provider> <api-key> · /update [branch] · /help · Ctrl-D quits")
     banner()
     while True:
         try:
@@ -222,7 +228,7 @@ def _chat(mode=None, model=None, backend=None) -> int:
             continue
         if msg in ("/help", "/?"):
             print("  /who, /switch <persona>, /models, /model <id>, /backend openai|anthropic|ollama,"
-                  " /update [branch]"); continue
+                  " /key <provider> <api-key>, /update [branch]"); continue
         if msg == "/who":
             print("Personas:\n" + modes.listing() + f"\n(currently: {bot.mode.name})"); continue
         if msg == "/models":
@@ -238,8 +244,25 @@ def _chat(mode=None, model=None, backend=None) -> int:
         if msg.startswith("/model "):
             bot.set_model(msg[len("/model "):].strip()); banner(); continue
         if msg.startswith("/backend"):
+            name = msg[len("/backend"):].strip()
             try:
-                bot.set_backend(msg[len("/backend"):].strip()); banner()
+                bot.set_backend(name); banner()
+            except Exception as e:
+                from .llm import needs_key
+                print("  ", e)
+                if needs_key(name):
+                    print(f"   set a key with:  /key {name} <your-api-key>")
+            continue
+        if msg.startswith("/key"):
+            parts = msg.split()
+            if len(parts) == 3:
+                name, key = parts[1], parts[2]
+            elif len(parts) == 2:
+                name, key = (getattr(bot.backend, "name", None), parts[1])
+            else:
+                print("  usage: /key <openai|anthropic> <api-key>"); continue
+            try:
+                bot.set_backend(name, api_key=key); banner()
             except Exception as e:
                 print("  ", e)
             continue
@@ -250,7 +273,7 @@ def _chat(mode=None, model=None, backend=None) -> int:
             if res.get("note"):
                 print("   " + res["note"])
             continue
-        res = bot.send(msg)
+        res = bot.send(msg, progress=prog)
         print(f"\n{bot.mode.name} ▶ " + res["reply"])
 
 

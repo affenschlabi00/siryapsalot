@@ -84,9 +84,17 @@ class OpenAIBackend(LLMBackend):
 class AnthropicBackend(LLMBackend):
     name = "anthropic"
 
-    def __init__(self, model: str | None = None, max_tokens: int = 8192):
-        import anthropic
-        self.client = anthropic.Anthropic()
+    def __init__(self, model: str | None = None, api_key: str | None = None,
+                 max_tokens: int = 8192):
+        try:
+            import anthropic
+        except ImportError:
+            raise LLMUnavailable("the anthropic SDK isn't installed — run `pip install anthropic` "
+                                 "(or `pip install -e \".[ai]\"`) to use Claude.")
+        key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        if not key:
+            raise LLMUnavailable("no Anthropic API key — set ANTHROPIC_API_KEY or paste a key.")
+        self.client = anthropic.Anthropic(api_key=key)
         self.model = model or os.environ.get("SIRYAPSALOT_MODEL", "claude-sonnet-4-6")
         self.max_tokens = max_tokens
 
@@ -158,18 +166,37 @@ def backend_available(name: str) -> bool:
     return False
 
 
+def all_backends() -> list[str]:
+    """Every provider the app supports (offered in the picker, key or not)."""
+    return list(_BACKENDS)
+
+
 def available_backends() -> list[str]:
-    """The provider names the user can switch to right now (for the UI's backend picker)."""
+    """The provider names that are ready to use right now (key present / server reachable)."""
     return [n for n in _BACKENDS if backend_available(n)]
 
 
-def make_backend(prefer: str | None = None) -> LLMBackend:
-    """Pick a backend: explicit > OpenAI key > Anthropic key > running Ollama."""
+def needs_key(name: str) -> bool:
+    """True for cloud providers that require an API key (so the UI can prompt for one)."""
+    return name in ("openai", "anthropic")
+
+
+def make_backend(prefer: str | None = None, api_key: str | None = None,
+                 model: str | None = None, host: str | None = None,
+                 base_url: str | None = None) -> LLMBackend:
+    """Pick a backend: explicit > OpenAI key > Anthropic key > running Ollama.
+
+    `api_key`/`model`/`host`/`base_url` let a caller supply credentials at runtime (e.g. a key
+    pasted into the web UI) instead of relying on environment variables."""
     prefer = prefer or os.environ.get("SIRYAPSALOT_BACKEND")
     if prefer:
         if prefer not in _BACKENDS:
             raise LLMUnavailable(f"unknown backend {prefer!r}; choose openai, anthropic, or ollama")
-        return _BACKENDS[prefer]()
+        if prefer == "openai":
+            return OpenAIBackend(model=model, api_key=api_key, base_url=base_url)
+        if prefer == "anthropic":
+            return AnthropicBackend(model=model, api_key=api_key)
+        return OllamaBackend(model=model, host=host)
     if os.environ.get("OPENAI_API_KEY"):
         return OpenAIBackend()
     if os.environ.get("ANTHROPIC_API_KEY"):

@@ -80,6 +80,15 @@ def _is_chat_spec(spec) -> bool:
     return ("reply" in spec) and not ("ir" in spec or "code" in spec)
 
 
+def _emit(progress, stage: str, message: str, **extra):
+    """Report a live build step (a greeting/compile/test/repair). Best-effort; never raises."""
+    if progress:
+        try:
+            progress({"stage": stage, "message": message, **extra})
+        except Exception:
+            pass
+
+
 def _check(test: dict, run: dict) -> tuple[bool, str]:
     """Did this self-test pass? Returns (ok, reason-if-not)."""
     if run["crashed"]:
@@ -168,15 +177,18 @@ class Chatbot:
             return model
         return None
 
-    def set_backend(self, name: str):
-        """Switch the LLM provider (e.g. 'openai'); keeps the same persona."""
+    def set_backend(self, name: str, api_key: str | None = None, model: str | None = None):
+        """Switch the LLM provider (e.g. 'openai'); keeps the same persona. An api_key/model can
+        be supplied at runtime (e.g. pasted in the UI) instead of relying on env vars."""
         from .llm import make_backend
-        b = make_backend(prefer=name)
+        b = make_backend(prefer=name, api_key=api_key, model=model)
         if hasattr(self.generator, "backend"):
             self.generator.backend = b
         return b
 
-    def send(self, message: str, verbose: bool = False) -> dict:
+    def send(self, message: str, verbose: bool = False, progress=None) -> dict:
+        """Build (or chat) in response to a message. `progress` is an optional callback that
+        receives live step dicts ({stage, message, ...}) so a UI can show what's happening."""
         os.makedirs(self.out_dir, exist_ok=True)
 
         # Small talk: reply instantly without touching the model or the build pipeline.
@@ -189,12 +201,16 @@ class Chatbot:
         feedback = None
         spec = {}
         for it in range(self.max_iters):
+            _emit(progress, "thinking",
+                  "Thinking…" if it == 0 else f"Rethinking (attempt {it + 1}/{self.max_iters})…",
+                  iter=it, max=self.max_iters)
             spec = self.generator(message, feedback, it, self.history)
 
             # The model can also choose to chat instead of build (kind=="chat"); honor it.
             if feedback is None and _is_chat_spec(spec):
                 reply = str(spec.get("reply") or "").strip() or _GREET_REPLY
                 self.history.append({"message": message, "reply": reply, "chat": True})
+                _emit(progress, "done", "")
                 return {"success": True, "reply": reply, "path": None, "ir": None,
                         "chat": True, "iterations": it + 1}
 
@@ -203,17 +219,22 @@ class Chatbot:
             tests = spec.get("self_tests") or [{"stdin": ""}]
             out = os.path.join(self.out_dir, f"{name}.exe")
 
+            _emit(progress, "compiling", f"Compiling {name}.exe…", iter=it, name=name)
             rep = self.builder(ir, out)
             if not rep["ok"]:
                 feedback = fb.from_build(rep)
+                _emit(progress, "repairing", "Build failed — reading the errors and fixing…",
+                      iter=it)
                 if verbose:
                     print(f"  iter {it}: build failed")
                 continue
             vp = harness.validate_pe(out)
             if not vp["ok"]:
                 feedback = fb.from_validate(vp)
+                _emit(progress, "repairing", "The binary didn't validate — fixing…", iter=it)
                 continue
 
+            _emit(progress, "testing", f"Running {len(tests)} self-test(s)…", iter=it)
             runs, failing = [], None
             for t in tests:
                 r = harness.run(out, stdin=t.get("stdin", ""))
@@ -227,15 +248,18 @@ class Chatbot:
                 reply = self._success_reply(spec, runs)
                 self.history.append({"message": message, "program_name": name,
                                      "explanation": spec.get("explanation", ""), "ir": ir})
+                _emit(progress, "done", f"Done — built {name}.exe ✅", iter=it, name=name)
                 return {"success": True, "reply": reply, "path": out, "ir": ir,
                         "explanation": spec.get("explanation", ""), "outputs": outputs,
                         "iterations": it + 1}
 
             t, r, why = failing
             feedback = self._test_feedback(t, r, why, out)
+            _emit(progress, "repairing", f"Self-test failed ({why}) — fixing…", iter=it, why=why)
             if verbose:
                 print(f"  iter {it}: self-test failed — {why}")
 
+        _emit(progress, "failed", "Couldn't get it working within a few attempts.")
         return {"success": False,
                 "reply": ("I couldn't get this one working within a few attempts. Could you "
                           "rephrase or simplify the request a little?"),

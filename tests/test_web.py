@@ -1,6 +1,7 @@
 """The web chat GUI: ChatService core + a live server round-trip (no model needed)."""
 import json
 import threading
+import time
 import urllib.request
 from http.server import HTTPServer
 
@@ -69,8 +70,17 @@ def test_web_server_roundtrip(build_dir):
         req = urllib.request.Request(base + "/api/build",
                                      data=json.dumps({"message": "tree"}).encode(),
                                      headers={"Content-Type": "application/json"})
-        res = json.loads(urllib.request.urlopen(req, timeout=10).read())
-        assert res["success"] and res["download"] == "christmas_tree.exe"
+        started = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        assert started["started"]                       # build runs in the background
+
+        res = None
+        for _ in range(200):                            # poll the live-progress endpoint
+            s = json.loads(urllib.request.urlopen(base + "/api/build/status", timeout=5).read())
+            if s["result"]:
+                res = s["result"]
+                break
+            time.sleep(0.05)
+        assert res and res["success"] and res["download"] == "christmas_tree.exe"
 
         exe = urllib.request.urlopen(base + "/download/christmas_tree.exe", timeout=5).read()
         assert exe[:2] == b"MZ"            # a real PE was served

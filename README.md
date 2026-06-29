@@ -64,12 +64,15 @@ ollama pull qwen2.5-coder
 export OLLAMA_MODEL=qwen2.5-coder     # a running Ollama server is also auto-detected
 ```
 
-**Switch provider & model any time.** In the **web UI** the top bar has a **provider** dropdown
-(OpenAI / Anthropic / Ollama — only the ones you have set up) next to a **model** dropdown; pick a
-provider and the model list refreshes to *that* provider's models (Ollama → your local models,
-OpenAI → the `gpt-*`/`o*` models on your key, Anthropic → the Claude models). In the terminal:
+**Switch provider & model any time — no env vars needed.** In the **web UI** the top bar has a
+**provider** dropdown listing **all three** (OpenAI / Anthropic / Ollama); ones you haven't set up
+are marked 🔑. Pick one that needs a key and a small **API-key box** appears — paste your key, press
+Enter, and you're on it (the key stays in memory for that session only, never written to disk). The
+**model** dropdown then refreshes to *that* provider's models (Ollama → your local models, OpenAI →
+the `gpt-*`/`o*` models on your key, Anthropic → the Claude models). In the terminal:
 `/models` (list), `/model gpt-4o` (switch model), `/backend openai|anthropic|ollama` (switch
-provider). At launch: `siryapsalot --backend openai --model gpt-4o`.
+provider), and `/key openai sk-...` (paste a key to switch to a cloud provider). At launch:
+`siryapsalot --backend openai --model gpt-4o`.
 
 **Then just chat:**
 
@@ -91,6 +94,12 @@ It's a real chat: small talk and questions ("hi", "what can you do?", "thanks") 
 reply — it only fires up the build pipeline when you actually ask for a program, so a "hello"
 never hangs while it tries to compile something. (Greetings are answered instantly without even
 calling the model; for anything ambiguous the model itself decides chat-vs-build.)
+
+**Live progress, no frozen screen.** Builds can take a while on slower models, so both the web UI
+and the terminal now stream what's happening — `⏳ Thinking… → Compiling guess.exe… → Running
+self-tests… → Self-test failed, fixing (attempt 2)… → Done ✅` — instead of sitting on one screen.
+The browser runs the build in the background and updates the bubble live; the terminal prints each
+step as it happens.
 
 ## Two builders — pick who you chat with
 
@@ -308,10 +317,11 @@ print(harness.run("build/hello.exe")["stdout"])          # -> "Hello, world!\n"
 - **Model backends** (`siryapsalot/llm.py`): OpenAI/ChatGPT, Anthropic, or local Ollama —
   switchable at runtime; **personas** in `siryapsalot/modes.py` (Lil Yapper / Yapzilla).
 - **Web UI + self-update** (`siryapsalot/web.py`, `siryapsalot/updater.py`): a browser chat with
-  persona, **provider, and per-provider model** pickers (choose a provider → the model list
-  refreshes to its models), a **🧪 Eval** button that benchmarks the selected model on the
-  oracle task suite (background thread + live scoreboard), download buttons, and a git **Update**
-  button (branch switching).
+  persona, **provider (+ paste-a-key), and per-provider model** pickers (choose a provider → the
+  model list refreshes to its models; unconfigured providers prompt for an API key, kept in memory
+  only), **live build progress** (builds run in a background thread; the UI polls and streams each
+  step), a **🧪 Eval** button that benchmarks the selected model on the oracle task suite, download
+  buttons, and a git **Update** button (branch switching).
 - **Training** (`siryapsalot/reward.py`, `siryapsalot/dataset.py`, `siryapsalot/training/`): the
   dense reward ladder (the RLVR signal, scores IR and raw bytes), the data harvester, an
   `RLEnv`, and an SFT formatter — the Phase 4/5 scaffolding.

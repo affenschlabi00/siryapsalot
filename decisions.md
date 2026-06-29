@@ -194,6 +194,26 @@ is `{"success":True,"reply":…,"path":None,"chat":True}`; the web/CLI already h
 binary (no download). When unsure, the model is told to prefer chat and ask a clarifying question
 rather than build something random.
 
+## D14 — Switch provider with a pasted key + live build progress
+Two UX gaps reported by a user running local Ollama: you couldn't switch to ChatGPT/Anthropic, and
+a build looked frozen for minutes.
+
+- **Provider switching without env vars.** `make_backend` / the backends now accept a runtime
+  `api_key` (and `model`/`host`/`base_url`), so credentials no longer have to come from the
+  environment. The web provider dropdown lists **all** providers (`llm.all_backends()`), not just
+  the configured ones (`llm.available_backends()`), marking unconfigured cloud ones with a key icon.
+  Picking one that needs a key reveals an API-key box; `POST /api/backend {backend, api_key}`
+  switches and returns `{ok:false, needs_key:true}` when a key is what's missing so the UI knows to
+  prompt. Keys live only in the in-memory backend object — never written to disk. CLI parity:
+  `/key <provider> <api-key>` (and `/backend` hints to use it). `AnthropicBackend` now raises a
+  clear `LLMUnavailable` if the SDK is missing or no key is set (instead of an opaque error).
+- **Live build feedback.** `Chatbot.send(message, progress=cb)` emits step events
+  (thinking, compiling, testing, repairing, done/failed). The terminal prints each step; the web
+  layer runs the build in a **background thread** (`ChatService.start_build`) and the browser polls
+  `GET /api/build/status` for the latest step + final result, so the page streams progress instead
+  of blocking. `/api/build` is now start-and-poll (one build at a time; a second returns
+  `{started:false, busy:true}`). `ChatService.message` stays synchronous as the testable core.
+
 ## Raw-bytes path (Plan §6 stretch — now implemented)
 The end goal: a model that emits raw bytes which become a great binary. Two levels are built,
 both sharing the trusted linker (`backend/layout.link`) and the harness repair loop:
